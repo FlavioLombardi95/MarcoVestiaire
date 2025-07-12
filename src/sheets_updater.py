@@ -11,6 +11,7 @@ import json
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
+import calendar
 
 # Configurazione logging
 logging.basicConfig(level=logging.INFO)
@@ -274,6 +275,198 @@ class GoogleSheetsUpdater:
         except Exception as e:
             logger.error(f"Errore nell'applicazione della formattazione: {e}")
             return False
+
+    def format_monthly_sheet(self, month_name: str, year: int):
+        """Formatta la tab mensile: merge celle, header, colori alternati, larghezza colonne."""
+        try:
+            days = calendar.monthrange(year, list(calendar.month_name).index(month_name.capitalize()))[1]
+            # Merge celle riga 1 per ogni giorno
+            requests = []
+            start_col = 2
+            for d in range(1, days+1):
+                end_col = start_col + 3
+                requests.append({
+                    "mergeCells": {
+                        "range": {
+                            "sheetId": self._get_sheet_id(month_name),
+                            "startRowIndex": 0,
+                            "endRowIndex": 1,
+                            "startColumnIndex": start_col,
+                            "endColumnIndex": end_col+1
+                        },
+                        "mergeType": "MERGE_ALL"
+                    }
+                })
+                start_col = end_col+1
+            # Colori alternati
+            start_col = 2
+            for d in range(1, days+1):
+                end_col = start_col + 3
+                color = {"red": 0.9, "green": 0.95, "blue": 1} if d % 2 == 0 else {"red": 1, "green": 1, "blue": 1}
+                requests.append({
+                    "repeatCell": {
+                        "range": {
+                            "sheetId": self._get_sheet_id(month_name),
+                            "startRowIndex": 0,
+                            "endRowIndex": 100,
+                            "startColumnIndex": start_col,
+                            "endColumnIndex": end_col+1
+                        },
+                        "cell": {
+                            "userEnteredFormat": {
+                                "backgroundColor": color
+                            }
+                        },
+                        "fields": "userEnteredFormat.backgroundColor"
+                    }
+                })
+                start_col = end_col+1
+            # Larghezza colonne
+            for c in range(2, 2+days*4):
+                requests.append({
+                    "updateDimensionProperties": {
+                        "range": {
+                            "sheetId": self._get_sheet_id(month_name),
+                            "dimension": "COLUMNS",
+                            "startIndex": c,
+                            "endIndex": c+1
+                        },
+                        "properties": {"pixelSize": 60},
+                        "fields": "pixelSize"
+                    }
+                })
+            # Applica richieste
+            self.service.spreadsheets().batchUpdate(
+                spreadsheetId=self.spreadsheet_id,
+                body={"requests": requests}
+            ).execute()
+            logger.info(f"Formattazione tab {month_name} completata")
+        except Exception as e:
+            logger.error(f"Errore nella formattazione tab mensile: {e}")
+
+    def _get_sheet_id(self, month_name: str):
+        spreadsheet = self.service.spreadsheets().get(spreadsheetId=self.spreadsheet_id).execute()
+        for s in spreadsheet['sheets']:
+            if s['properties']['title'] == month_name:
+                return s['properties']['sheetId']
+        raise Exception(f"Sheet {month_name} non trovato")
+
+    def create_monthly_tab(self, month_name: str, year: int):
+        """Crea la tab del mese con tutte le intestazioni se non esiste."""
+        try:
+            # Ottieni lista delle tab
+            spreadsheet = self.service.spreadsheets().get(spreadsheetId=self.spreadsheet_id).execute()
+            sheet_names = [s['properties']['title'] for s in spreadsheet['sheets']]
+            if month_name not in sheet_names:
+                # Crea la tab
+                requests = [{
+                    "addSheet": {
+                        "properties": {
+                            "title": month_name
+                        }
+                    }
+                }]
+                self.service.spreadsheets().batchUpdate(
+                    spreadsheetId=self.spreadsheet_id,
+                    body={"requests": requests}
+                ).execute()
+                logger.info(f"Tab '{month_name}' creata")
+                # Prepara intestazioni
+                days = calendar.monthrange(year, list(calendar.month_name).index(month_name.capitalize()))[1]
+                # Riga 1: date (merge da formattazione)
+                header1 = ["Profilo", "URL"]
+                for d in range(1, days+1):
+                    header1 += [f"{d} {month_name}", "", "", ""]
+                # Riga 2: etichette
+                header2 = ["", ""]
+                for d in range(1, days+1):
+                    header2 += ["articoli", "vendite", "diff stock", "diff vendite"]
+                # Scrivi intestazioni
+                self.service.spreadsheets().values().update(
+                    spreadsheetId=self.spreadsheet_id,
+                    range=f"{month_name}!A1",
+                    valueInputOption='RAW',
+                    body={'values': [header1, header2]}
+                ).execute()
+                logger.info(f"Intestazioni scritte su '{month_name}'")
+                # Applica formattazione
+                self.format_monthly_sheet(month_name, year)
+        except Exception as e:
+            logger.error(f"Errore nella creazione tab mensile: {e}")
+
+    def update_monthly_sheet(self, scraped_data: list, year: int, month: int, day: int):
+        """Aggiorna la tab mensile con i dati del giorno, calcolando le differenze."""
+        import copy
+        month_name = calendar.month_name[month].lower()
+        self.create_monthly_tab(month_name, year)
+        # Leggi dati attuali
+        result = self.service.spreadsheets().values().get(
+            spreadsheetId=self.spreadsheet_id,
+            range=f"{month_name}!A:ZZ"
+        ).execute()
+        values = result.get('values', [])
+        if not values:
+            logger.error(f"Tab {month_name} vuota!")
+            return False
+        header = values[0]
+        # Mappa profilo->riga
+        profilo_to_row = {row[0]: i for i, row in enumerate(values[1:], start=2) if row and row[0]}
+        # Calcola colonne da aggiornare
+        base_col = 2 + (day-1)*4
+        articoli_col = base_col
+        vendite_col = base_col+1
+        diff_stock_col = base_col+2
+        diff_vendite_col = base_col+3
+        # Prepara update
+        updates = []
+        for profilo in scraped_data:
+            name = profilo['name']
+            url = profilo['url']
+            articoli = profilo['articles']
+            vendite = profilo['sales']
+            # Trova riga
+            if name in profilo_to_row:
+                row_idx = profilo_to_row[name]
+                row = copy.deepcopy(values[row_idx-1]) if row_idx-1 < len(values) else [name, url]
+            else:
+                # Nuovo profilo
+                row = [name, url] + ["" for _ in range(len(header)-2)]
+                values.append(row)
+                row_idx = len(values)
+                # Aggiorna mapping
+                profilo_to_row[name] = row_idx
+            # Calcola differenze
+            prev_articoli = None
+            prev_vendite = None
+            if articoli_col-4 < len(row):
+                try:
+                    prev_articoli = int(row[articoli_col-4]) if row[articoli_col-4] else None
+                except:
+                    prev_articoli = None
+                try:
+                    prev_vendite = int(row[vendite_col-4]) if row[vendite_col-4] else None
+                except:
+                    prev_vendite = None
+            diff_stock = articoli - prev_articoli if prev_articoli is not None else ""
+            diff_vendite = vendite - prev_vendite if prev_vendite is not None else ""
+            # Allunga la riga se serve
+            while len(row) < diff_vendite_col+1:
+                row.append("")
+            row[articoli_col] = str(articoli)
+            row[vendite_col] = str(vendite)
+            row[diff_stock_col] = str(diff_stock)
+            row[diff_vendite_col] = str(diff_vendite)
+            # Aggiorna la riga in values
+            values[row_idx-1] = row
+        # Scrivi tutte le righe aggiornate
+        self.service.spreadsheets().values().update(
+            spreadsheetId=self.spreadsheet_id,
+            range=f"{month_name}!A1",
+            valueInputOption='RAW',
+            body={'values': values}
+        ).execute()
+        logger.info(f"Tab {month_name} aggiornata con i dati del giorno {day}")
+        return True
 
 def main():
     """Funzione principale per testare l'updater"""

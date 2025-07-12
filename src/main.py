@@ -203,6 +203,34 @@ def aggiorna_sheet_con_dati_statici():
     sheets_updater.update_sheet(dati, sheet_name="riepilogo")
     logger.info("Aggiornamento completato!")
 
+def aggiorna_tab_mensile_statico():
+    """Aggiorna la tab mensile con i dati statici dell'ultimo test, usando la nuova logica."""
+    import datetime
+    logger.info("=== AGGIORNAMENTO TAB MENSILE CON DATI STATICI ===")
+    dati = [
+        {"name": "Rediscover", "url": "https://it.vestiairecollective.com/profile/2039815/", "articles": 592, "sales": 7217, "timestamp": ""},
+        {"name": "Volodymyr", "url": "https://it.vestiairecollective.com/profile/5924329/", "articles": 0, "sales": 0, "timestamp": ""},
+        {"name": "stephanie", "url": "https://it.vestiairecollective.com/profile/9168643/", "articles": 565, "sales": 801, "timestamp": ""},
+        {"name": "Mark", "url": "https://it.vestiairecollective.com/profile/13442939/", "articles": 5027, "sales": 1891, "timestamp": ""},
+        {"name": "A Retro Tale", "url": "https://it.vestiairecollective.com/profile/5537180/", "articles": 5064, "sales": 5433, "timestamp": ""},
+        {"name": "Lapsa", "url": "https://it.vestiairecollective.com/profile/11345596/", "articles": 795, "sales": 4349, "timestamp": ""},
+        {"name": "Bag", "url": "https://it.vestiairecollective.com/profile/3770739/", "articles": 14, "sales": 230, "timestamp": ""},
+        {"name": "Clara", "url": "https://it.vestiairecollective.com/profile/27862876/", "articles": 1610, "sales": 149, "timestamp": ""},
+        {"name": "Baggy Vintage", "url": "https://it.vestiairecollective.com/profile/18106856/", "articles": 369, "sales": 675, "timestamp": ""},
+        {"name": "Vintageandkickz", "url": "https://it.vestiairecollective.com/profile/19199976/", "articles": 2389, "sales": 4178, "timestamp": ""},
+        {"name": "Vintage & Modern", "url": "https://it.vestiairecollective.com/profile/29517320/", "articles": 24, "sales": 27, "timestamp": ""},
+    ]
+    credentials = load_credentials()
+    import json as _json
+    if isinstance(credentials, dict):
+        credentials_json = _json.dumps(credentials)
+    else:
+        credentials_json = credentials
+    sheets_updater = GoogleSheetsUpdater(credentials_json)
+    today = datetime.date.today()
+    sheets_updater.update_monthly_sheet(dati, today.year, today.month, today.day)
+    logger.info("Aggiornamento tab mensile completato!")
+
 if __name__ == "__main__":
     # Controlla gli argomenti della riga di comando
     if len(sys.argv) > 1:
@@ -213,12 +241,15 @@ if __name__ == "__main__":
             test_sheets()
         elif command == "aggiorna-statico":
             aggiorna_sheet_con_dati_statici()
+        elif command == "aggiorna-mensile-statico":
+            aggiorna_tab_mensile_statico()
         elif command == "help":
             print("Comandi disponibili:")
             print("  python main.py          - Esegue il monitoraggio completo")
             print("  python main.py test     - Testa solo lo scraping")
             print("  python main.py test-sheets - Testa solo Google Sheets")
             print("  python main.py aggiorna-statico - Aggiorna sheet solo con dati statici, cancellando tutto prima")
+            print("  python main.py aggiorna-mensile-statico - Aggiorna la tab mensile con dati statici e logica nuova")
             print("  python main.py help     - Mostra questo aiuto")
         else:
             print(f"Comando sconosciuto: {command}")
