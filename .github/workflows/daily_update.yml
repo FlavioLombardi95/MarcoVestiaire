@@ -1,0 +1,60 @@
+name: Vestiaire Daily Monitor
+
+on:
+  schedule:
+    # Esegui ogni giorno alle 9:00 AM (CET)
+    - cron: '0 8 * * *'
+  workflow_dispatch:
+    # Permette l'esecuzione manuale
+
+jobs:
+  monitor-vestiaire:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+        
+    - name: Install Chrome
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y google-chrome-stable
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        
+    - name: Run Vestiaire Monitor
+      env:
+        GOOGLE_SHEETS_CREDENTIALS: ${{ secrets.GOOGLE_SHEETS_CREDENTIALS }}
+      run: |
+        cd src
+        python main.py
+        
+    - name: Upload logs
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: vestiaire-logs
+        path: |
+          *.log
+          logs/
+        retention-days: 7
+        
+    - name: Notify on failure
+      if: failure()
+      uses: actions/github-script@v6
+      with:
+        script: |
+          github.rest.issues.create({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            title: 'Vestiaire Monitor Failed',
+            body: `Il monitoraggio Vestiaire è fallito il ${new Date().toISOString()}. Controlla i logs per maggiori dettagli.`
+          }) 
