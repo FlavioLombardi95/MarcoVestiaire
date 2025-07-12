@@ -468,6 +468,10 @@ class GoogleSheetsUpdater:
         logger.info(f"Tab {month_name} aggiornata con i dati del giorno {day}")
         return True
 
+    def format_only_monthly_sheet(self, month_name: str, year: int):
+        """Applica solo la formattazione a una tab mensile già esistente, senza toccare i dati."""
+        self.format_monthly_sheet(month_name, year)
+
 def main():
     """Funzione principale per testare l'updater"""
     # Test con dati di esempio

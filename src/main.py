@@ -231,6 +231,21 @@ def aggiorna_tab_mensile_statico():
     sheets_updater.update_monthly_sheet(dati, today.year, today.month, today.day)
     logger.info("Aggiornamento tab mensile completato!")
 
+def formatta_tab_mensile():
+    import datetime
+    logger.info("=== FORMATTAZIONE SOLO TAB MENSILE ===")
+    credentials = load_credentials()
+    import json as _json
+    if isinstance(credentials, dict):
+        credentials_json = _json.dumps(credentials)
+    else:
+        credentials_json = credentials
+    sheets_updater = GoogleSheetsUpdater(credentials_json)
+    today = datetime.date.today()
+    month_name = today.strftime('%B').lower()
+    sheets_updater.format_only_monthly_sheet(month_name, today.year)
+    logger.info("Formattazione tab mensile completata!")
+
 if __name__ == "__main__":
     # Controlla gli argomenti della riga di comando
     if len(sys.argv) > 1:
@@ -243,6 +258,8 @@ if __name__ == "__main__":
             aggiorna_sheet_con_dati_statici()
         elif command == "aggiorna-mensile-statico":
             aggiorna_tab_mensile_statico()
+        elif command == "formatta-mensile":
+            formatta_tab_mensile()
         elif command == "help":
             print("Comandi disponibili:")
             print("  python main.py          - Esegue il monitoraggio completo")
@@ -250,6 +267,7 @@ if __name__ == "__main__":
             print("  python main.py test-sheets - Testa solo Google Sheets")
             print("  python main.py aggiorna-statico - Aggiorna sheet solo con dati statici, cancellando tutto prima")
             print("  python main.py aggiorna-mensile-statico - Aggiorna la tab mensile con dati statici e logica nuova")
+            print("  python main.py formatta-mensile - Applica solo la formattazione alla tab del mese corrente")
             print("  python main.py help     - Mostra questo aiuto")
         else:
             print(f"Comando sconosciuto: {command}")
