@@ -8,7 +8,7 @@ import sys
 import logging
 import json
 from datetime import datetime
-from typing import Dict, List
+from typing import Dict, List, Union
 
 # Aggiungi il percorso src al path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -24,18 +24,33 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 def load_credentials() -> Dict:
-    """Carica le credenziali Google Sheets da variabile d'ambiente"""
+    """Carica le credenziali Google Sheets automaticamente"""
     try:
         # Prova a caricare da variabile d'ambiente
         credentials_json = os.getenv('GOOGLE_SHEETS_CREDENTIALS')
         if credentials_json:
             return json.loads(credentials_json)
         
-        # Prova a caricare da file
+        # Prova a caricare da variabile d'ambiente con percorso file
         credentials_file = os.getenv('GOOGLE_SHEETS_CREDENTIALS_FILE')
         if credentials_file and os.path.exists(credentials_file):
             with open(credentials_file, 'r') as f:
                 return json.load(f)
+        
+        # Cerca automaticamente il file delle credenziali nella directory del progetto
+        project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        possible_files = [
+            "vestiaire-monitor-ba3e8b6417eb.json",
+            "credentials.json",
+            "google-sheets-credentials.json"
+        ]
+        
+        for filename in possible_files:
+            file_path = os.path.join(project_root, filename)
+            if os.path.exists(file_path):
+                logger.info(f"Caricamento credenziali da: {file_path}")
+                with open(file_path, 'r') as f:
+                    return json.load(f)
         
         logger.warning("Nessuna credenziale trovata. Lo scraping funzionerà ma non l'aggiornamento di Google Sheets.")
         return {}
@@ -70,10 +85,16 @@ def main():
         # 4. Aggiorna Google Sheets se le credenziali sono disponibili
         if credentials:
             logger.info("Aggiornamento Google Sheets...")
-            sheets_updater = GoogleSheetsUpdater(credentials)
+            # Se le credenziali sono un dict, convertilo in stringa JSON
+            import json as _json
+            if isinstance(credentials, dict):
+                credentials_json = _json.dumps(credentials)
+            else:
+                credentials_json = credentials
+            sheets_updater = GoogleSheetsUpdater(credentials_json)
             
             # Aggiorna il foglio principale
-            success = sheets_updater.update_sheet(scraped_data)
+            success = sheets_updater.update_sheet(scraped_data, sheet_name="riepilogo")
             if success:
                 logger.info("Google Sheets aggiornato con successo")
             else:
@@ -129,7 +150,12 @@ def test_sheets():
         if not credentials:
             logger.warning("Nessuna credenziale disponibile per il test")
             return False
-        
+        # Se le credenziali sono un dict, convertilo in stringa JSON
+        import json as _json
+        if isinstance(credentials, dict):
+            credentials_json = _json.dumps(credentials)
+        else:
+            credentials_json = credentials
         # Dati di test
         test_data = [
             {
@@ -140,35 +166,59 @@ def test_sheets():
                 "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             }
         ]
-        
-        sheets_updater = GoogleSheetsUpdater(credentials)
-        success = sheets_updater.update_sheet(test_data)
-        
+        sheets_updater = GoogleSheetsUpdater(credentials_json)
+        success = sheets_updater.update_sheet(test_data, sheet_name="riepilogo")
         if success:
             logger.info("Test Google Sheets completato con successo")
         else:
             logger.error("Test Google Sheets fallito")
-        
         return success
-        
     except Exception as e:
         logger.error(f"Errore nel test Google Sheets: {e}")
         return False
+
+def aggiorna_sheet_con_dati_statici():
+    """Aggiorna la tab 'riepilogo' con i dati statici dell'ultimo test, cancellando prima tutto."""
+    logger.info("=== AGGIORNAMENTO SOLO SHEET CON DATI STATICI ===")
+    dati = [
+        {"name": "Rediscover", "url": "https://it.vestiairecollective.com/profile/2039815/", "articles": 592, "sales": 7217, "timestamp": ""},
+        {"name": "Volodymyr", "url": "https://it.vestiairecollective.com/profile/5924329/", "articles": 0, "sales": 0, "timestamp": ""},
+        {"name": "stephanie", "url": "https://it.vestiairecollective.com/profile/9168643/", "articles": 565, "sales": 801, "timestamp": ""},
+        {"name": "Mark", "url": "https://it.vestiairecollective.com/profile/13442939/", "articles": 5027, "sales": 1891, "timestamp": ""},
+        {"name": "A Retro Tale", "url": "https://it.vestiairecollective.com/profile/5537180/", "articles": 5064, "sales": 5433, "timestamp": ""},
+        {"name": "Lapsa", "url": "https://it.vestiairecollective.com/profile/11345596/", "articles": 795, "sales": 4349, "timestamp": ""},
+        {"name": "Bag", "url": "https://it.vestiairecollective.com/profile/3770739/", "articles": 14, "sales": 230, "timestamp": ""},
+        {"name": "Clara", "url": "https://it.vestiairecollective.com/profile/27862876/", "articles": 1610, "sales": 149, "timestamp": ""},
+        {"name": "Baggy Vintage", "url": "https://it.vestiairecollective.com/profile/18106856/", "articles": 369, "sales": 675, "timestamp": ""},
+        {"name": "Vintageandkickz", "url": "https://it.vestiairecollective.com/profile/19199976/", "articles": 2389, "sales": 4178, "timestamp": ""},
+        {"name": "Vintage & Modern", "url": "https://it.vestiairecollective.com/profile/29517320/", "articles": 24, "sales": 27, "timestamp": ""},
+    ]
+    credentials = load_credentials()
+    import json as _json
+    if isinstance(credentials, dict):
+        credentials_json = _json.dumps(credentials)
+    else:
+        credentials_json = credentials
+    sheets_updater = GoogleSheetsUpdater(credentials_json)
+    sheets_updater.update_sheet(dati, sheet_name="riepilogo")
+    logger.info("Aggiornamento completato!")
 
 if __name__ == "__main__":
     # Controlla gli argomenti della riga di comando
     if len(sys.argv) > 1:
         command = sys.argv[1].lower()
-        
         if command == "test":
             test_scraping()
         elif command == "test-sheets":
             test_sheets()
+        elif command == "aggiorna-statico":
+            aggiorna_sheet_con_dati_statici()
         elif command == "help":
             print("Comandi disponibili:")
             print("  python main.py          - Esegue il monitoraggio completo")
             print("  python main.py test     - Testa solo lo scraping")
             print("  python main.py test-sheets - Testa solo Google Sheets")
+            print("  python main.py aggiorna-statico - Aggiorna sheet solo con dati statici, cancellando tutto prima")
             print("  python main.py help     - Mostra questo aiuto")
         else:
             print(f"Comando sconosciuto: {command}")

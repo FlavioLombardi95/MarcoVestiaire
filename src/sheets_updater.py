@@ -120,42 +120,56 @@ class GoogleSheetsUpdater:
         
         return [header] + rows
     
-    def update_sheet(self, scraped_data: List[Dict], sheet_name: str = "Foglio1"):
-        """Aggiorna il foglio Google Sheets con i nuovi dati"""
+    def clear_sheet(self, sheet_name: str = "riepilogo"):
+        """Cancella tutti i dati dal foglio specificato"""
         try:
             if not self.service:
                 raise Exception("Servizio Google Sheets non configurato")
-            
+            range_name = f"{sheet_name}!A:Z"
+            body = {"values": []}
+            self.service.spreadsheets().values().clear(
+                spreadsheetId=self.spreadsheet_id,
+                range=range_name,
+                body={}
+            ).execute()
+            logger.info(f"Cancellati tutti i dati dal foglio '{sheet_name}'")
+            return True
+        except Exception as e:
+            logger.error(f"Errore nella cancellazione del foglio: {e}")
+            return False
+
+    def update_sheet(self, scraped_data: List[Dict], sheet_name: str = "riepilogo"):
+        """Aggiorna il foglio Google Sheets con i nuovi dati, cancellando prima tutto"""
+        try:
+            if not self.service:
+                raise Exception("Servizio Google Sheets non configurato")
+            # Cancella tutto prima di scrivere
+            self.clear_sheet(sheet_name)
             # Prepara i dati
             data_to_insert = self.prepare_data_for_sheet(scraped_data)
-            
-            # Trova la prossima riga vuota
-            range_name = f"{sheet_name}!A:Z"
-            result = self.service.spreadsheets().values().get(
-                spreadsheetId=self.spreadsheet_id,
-                range=range_name
-            ).execute()
-            
-            values = result.get('values', [])
-            next_row = len(values) + 1
-            
-            # Inserisci i nuovi dati
-            range_to_update = f"{sheet_name}!A{next_row}"
-            
+            # Scrivi i nuovi dati dalla prima riga
+            range_to_update = f"{sheet_name}!A1"
             body = {
                 'values': data_to_insert
             }
-            
             result = self.service.spreadsheets().values().update(
                 spreadsheetId=self.spreadsheet_id,
                 range=range_to_update,
                 valueInputOption='RAW',
                 body=body
             ).execute()
-            
             logger.info(f"Aggiornamento completato: {result.get('updatedCells')} celle aggiornate")
+            # Scrivi il timestamp in G1
+            from datetime import datetime
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            self.service.spreadsheets().values().update(
+                spreadsheetId=self.spreadsheet_id,
+                range=f"{sheet_name}!G1",
+                valueInputOption='RAW',
+                body={'values': [[timestamp]]}
+            ).execute()
+            logger.info(f"Timestamp aggiornamento scritto in {sheet_name}!G1: {timestamp}")
             return True
-            
         except HttpError as e:
             logger.error(f"Errore HTTP nell'aggiornamento del foglio: {e}")
             return False
@@ -183,8 +197,8 @@ class GoogleSheetsUpdater:
                 ]
                 summary_data.append(summary_row)
             
-            # Inserisci nel foglio "Riepilogo"
-            range_name = "Riepilogo!A:E"
+            # Inserisci nel foglio "riepilogo"
+            range_name = "riepilogo!A:E"
             
             body = {
                 'values': summary_data
