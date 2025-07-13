@@ -298,17 +298,18 @@ class GoogleSheetsUpdater:
                     }
                 })
                 start_col = end_col+1
-            # Colori alternati
+            # Colori alternati (bianco/blu chiaro ben visibile)
             start_col = 2
             for d in range(1, days+1):
                 end_col = start_col + 3
-                color = {"red": 0.9, "green": 0.95, "blue": 1} if d % 2 == 0 else {"red": 1, "green": 1, "blue": 1}
+                # Blu chiaro più visibile: #e3f0fc (RGB: 0.89, 0.94, 0.99)
+                color = {"red": 0.89, "green": 0.94, "blue": 0.99} if d % 2 == 0 else {"red": 1, "green": 1, "blue": 1}
                 requests.append({
                     "repeatCell": {
                         "range": {
                             "sheetId": self._get_sheet_id(month_name),
                             "startRowIndex": 0,
-                            "endRowIndex": 100,
+                            "endRowIndex": 30,  # prime 30 righe (header + dati)
                             "startColumnIndex": start_col,
                             "endColumnIndex": end_col+1
                         },
