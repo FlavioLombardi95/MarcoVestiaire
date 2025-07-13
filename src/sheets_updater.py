@@ -284,6 +284,15 @@ class GoogleSheetsUpdater:
             requests = []
             sheet_id = self._get_sheet_id(month_name)
             logger.info(f"[FORMAT] sheet_id trovato per '{month_name}': {sheet_id}")
+            # Calcola il numero di righe dati (senza la riga Totali)
+            result = self.service.spreadsheets().values().get(
+                spreadsheetId=self.spreadsheet_id,
+                range=f"{month_name}!A:ZZ"
+            ).execute()
+            values = result.get('values', [])
+            num_data_rows = len(values) - 1 if values and values[-1][0] == "Totali" else len(values)
+            end_row = num_data_rows  # escludi la riga Totali
+            logger.info(f"[FORMAT] Colori alternati fino a riga: {end_row}")
             start_col = 2
             for d in range(1, days+1):
                 end_col = start_col + 3
@@ -300,7 +309,7 @@ class GoogleSheetsUpdater:
                     }
                 })
                 start_col = end_col+1
-            # Colori alternati (bianco/blu chiaro ben visibile)
+            # Colori alternati (bianco/blu chiaro ben visibile) SOLO sulle righe dati
             start_col = 2
             for d in range(1, days+1):
                 end_col = start_col + 3
@@ -310,7 +319,7 @@ class GoogleSheetsUpdater:
                         "range": {
                             "sheetId": sheet_id,
                             "startRowIndex": 0,
-                            "endRowIndex": 30,  # prime 30 righe (header + dati)
+                            "endRowIndex": end_row,  # solo fino ai dati
                             "startColumnIndex": start_col,
                             "endColumnIndex": end_col+1
                         },
