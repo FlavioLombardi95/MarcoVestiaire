@@ -2,8 +2,8 @@ name: Vestiaire Daily Monitor
 
 on:
   schedule:
-    # Esegui ogni 15 minuti
-    - cron: '*/15 * * * *'
+    # Esegui ogni 3 ore
+    - cron: '0 */3 * * *'
   workflow_dispatch:
     # Permette l'esecuzione manuale
 
