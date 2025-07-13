@@ -49,7 +49,22 @@ class VestiaireScraper:
             chrome_options.add_argument("--window-size=1920,1080")
             chrome_options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
             
-            service = Service(ChromeDriverManager().install())
+            # Gestione specifica per macOS
+            import platform
+            if platform.system() == "Darwin":
+                # Per macOS, usa il percorso diretto di Chrome
+                chrome_options.binary_location = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+                chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+                chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+                chrome_options.add_experimental_option('useAutomationExtension', False)
+            
+            # Ottieni il percorso del ChromeDriver
+            driver_path = ChromeDriverManager().install()
+            # Assicurati che punti al file chromedriver corretto
+            if driver_path.endswith('THIRD_PARTY_NOTICES.chromedriver'):
+                driver_path = driver_path.replace('THIRD_PARTY_NOTICES.chromedriver', 'chromedriver')
+            
+            service = Service(driver_path)
             self.driver = webdriver.Chrome(service=service, options=chrome_options)
             logger.info("Driver Chrome configurato con successo")
             
@@ -84,66 +99,43 @@ class VestiaireScraper:
             # Attendi il caricamento della pagina
             time.sleep(5)
             
-            # Cerca gli elementi con i dati
-            articles = 0
-            sales = 0
+            # DEBUG: stampa tutti i testi di <span> e <div> per il primo profilo
+            if profile_name == "Rediscover":
+                print("\n--- DEBUG: Tutti gli span ---")
+                spans = self.driver.find_elements(By.TAG_NAME, "span")
+                for s in spans:
+                    try:
+                        txt = s.text.strip()
+                        if txt:
+                            print(f"[span] {txt}")
+                    except Exception:
+                        pass
+                print("\n--- DEBUG: Tutti i div ---")
+                divs = self.driver.find_elements(By.TAG_NAME, "div")
+                for d in divs:
+                    try:
+                        txt = d.text.strip()
+                        if txt:
+                            print(f"[div] {txt}")
+                    except Exception:
+                        pass
             
-            # Prova diversi selettori per trovare i numeri
-            selectors = [
-                "//span[contains(text(), 'articoli') or contains(text(), 'items')]",
-                "//div[contains(@class, 'count')]",
-                "//span[contains(@class, 'number')]",
-                "//div[contains(text(), 'articoli')]",
-                "//span[contains(text(), 'vendite') or contains(text(), 'sales')]"
-            ]
+            # Nuovo algoritmo: estrai i dati direttamente dagli span
+            spans = self.driver.find_elements(By.TAG_NAME, "span")
+            for s in spans:
+                txt = s.text.strip()
+                if txt.endswith("items for sale"):
+                    try:
+                        articles = int(txt.split()[0].replace(',', '').replace('.', ''))
+                    except Exception:
+                        pass
+                if txt.endswith("sold"):
+                    try:
+                        sales = int(txt.split()[0].replace(',', '').replace('.', ''))
+                    except Exception:
+                        pass
             
-            page_source = self.driver.page_source
-            
-            # Cerca pattern comuni per articoli e vendite
-            # Pattern per articoli
-            article_patterns = [
-                r'(\d+(?:,\d+)*)\s*articoli?',
-                r'(\d+(?:,\d+)*)\s*items?',
-                r'(\d+(?:,\d+)*)\s*prodotti?'
-            ]
-            
-            # Pattern per vendite
-            sales_patterns = [
-                r'(\d+(?:,\d+)*)\s*vendite?',
-                r'(\d+(?:,\d+)*)\s*sales?',
-                r'(\d+(?:,\d+)*)\s*acquisti?'
-            ]
-            
-            # Estrai articoli
-            for pattern in article_patterns:
-                matches = re.findall(pattern, page_source, re.IGNORECASE)
-                if matches:
-                    articles = self.extract_numbers_from_text(matches[0])
-                    break
-            
-            # Estrai vendite
-            for pattern in sales_patterns:
-                matches = re.findall(pattern, page_source, re.IGNORECASE)
-                if matches:
-                    sales = self.extract_numbers_from_text(matches[0])
-                    break
-            
-            # Se non troviamo i dati, prova a cercare elementi specifici
-            if articles == 0 or sales == 0:
-                try:
-                    # Cerca elementi con classi specifiche
-                    elements = self.driver.find_elements(By.CSS_SELECTOR, "[class*='count'], [class*='number'], [class*='stats']")
-                    for element in elements:
-                        text = element.text.lower()
-                        if 'articoli' in text or 'items' in text:
-                            articles = self.extract_numbers_from_text(element.text)
-                        elif 'vendite' in text or 'sales' in text:
-                            sales = self.extract_numbers_from_text(element.text)
-                except Exception as e:
-                    logger.warning(f"Errore nell'estrazione dati specifici per {profile_name}: {e}")
-            
-            logger.info(f"Profilo {profile_name}: {articles} articoli, {sales} vendite")
-            
+            logger.info(f"Profilo {profile_name}: {articles} in vendita, {sales} venduti")
             return {
                 "name": profile_name,
                 "profile_id": profile_id,
@@ -152,7 +144,6 @@ class VestiaireScraper:
                 "sales": sales,
                 "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
             }
-            
         except Exception as e:
             logger.error(f"Errore nello scraping del profilo {profile_name}: {e}")
             return {

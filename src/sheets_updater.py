@@ -459,6 +459,22 @@ class GoogleSheetsUpdater:
             row[diff_vendite_col] = str(diff_vendite)
             # Aggiorna la riga in values
             values[row_idx-1] = row
+        # Calcola e aggiungi la riga dei totali
+        num_cols = len(header)
+        num_rows = len(values)
+        totali_row = ["Totali", ""]
+        for c in range(2, num_cols):
+            col_sum = 0
+            for r in range(1, num_rows):
+                try:
+                    val = int(values[r][c]) if c < len(values[r]) and values[r][c] else 0
+                except:
+                    val = 0
+                col_sum += val
+            totali_row.append(str(col_sum) if col_sum != 0 else "")
+        # Rimuovi eventuale riga Totali precedente
+        values = [row for row in values if not (row and row[0] == "Totali")]
+        values.append(totali_row)
         # Scrivi tutte le righe aggiornate
         self.service.spreadsheets().values().update(
             spreadsheetId=self.spreadsheet_id,
@@ -466,7 +482,33 @@ class GoogleSheetsUpdater:
             valueInputOption='RAW',
             body={'values': values}
         ).execute()
-        logger.info(f"Tab {month_name} aggiornata con i dati del giorno {day}")
+        # Applica sfondo grigio chiaro alla riga Totali
+        try:
+            sheet_id = self._get_sheet_id(month_name)
+            requests = [{
+                "repeatCell": {
+                    "range": {
+                        "sheetId": sheet_id,
+                        "startRowIndex": len(values)-1,
+                        "endRowIndex": len(values),
+                        "startColumnIndex": 0,
+                        "endColumnIndex": num_cols
+                    },
+                    "cell": {
+                        "userEnteredFormat": {
+                            "backgroundColor": {"red": 0.9, "green": 0.9, "blue": 0.9}
+                        }
+                    },
+                    "fields": "userEnteredFormat.backgroundColor"
+                }
+            }]
+            self.service.spreadsheets().batchUpdate(
+                spreadsheetId=self.spreadsheet_id,
+                body={"requests": requests}
+            ).execute()
+        except Exception as e:
+            logger.error(f"Errore nella formattazione della riga Totali: {e}")
+        logger.info(f"Tab {month_name} aggiornata con i dati del giorno {day} e riga Totali")
         return True
 
     def format_only_monthly_sheet(self, month_name: str, year: int):
