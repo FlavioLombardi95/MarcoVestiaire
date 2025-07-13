@@ -282,13 +282,15 @@ class GoogleSheetsUpdater:
             days = calendar.monthrange(year, list(calendar.month_name).index(month_name.capitalize()))[1]
             # Merge celle riga 1 per ogni giorno
             requests = []
+            sheet_id = self._get_sheet_id(month_name)
+            logger.info(f"[FORMAT] sheet_id trovato per '{month_name}': {sheet_id}")
             start_col = 2
             for d in range(1, days+1):
                 end_col = start_col + 3
                 requests.append({
                     "mergeCells": {
                         "range": {
-                            "sheetId": self._get_sheet_id(month_name),
+                            "sheetId": sheet_id,
                             "startRowIndex": 0,
                             "endRowIndex": 1,
                             "startColumnIndex": start_col,
@@ -302,12 +304,11 @@ class GoogleSheetsUpdater:
             start_col = 2
             for d in range(1, days+1):
                 end_col = start_col + 3
-                # Blu chiaro più visibile: #e3f0fc (RGB: 0.89, 0.94, 0.99)
                 color = {"red": 0.89, "green": 0.94, "blue": 0.99} if d % 2 == 0 else {"red": 1, "green": 1, "blue": 1}
                 requests.append({
                     "repeatCell": {
                         "range": {
-                            "sheetId": self._get_sheet_id(month_name),
+                            "sheetId": sheet_id,
                             "startRowIndex": 0,
                             "endRowIndex": 30,  # prime 30 righe (header + dati)
                             "startColumnIndex": start_col,
@@ -327,7 +328,7 @@ class GoogleSheetsUpdater:
                 requests.append({
                     "updateDimensionProperties": {
                         "range": {
-                            "sheetId": self._get_sheet_id(month_name),
+                            "sheetId": sheet_id,
                             "dimension": "COLUMNS",
                             "startIndex": c,
                             "endIndex": c+1
@@ -336,11 +337,13 @@ class GoogleSheetsUpdater:
                         "fields": "pixelSize"
                     }
                 })
+            logger.info(f"[FORMAT] Numero richieste batch da inviare: {len(requests)}")
             # Applica richieste
-            self.service.spreadsheets().batchUpdate(
+            resp = self.service.spreadsheets().batchUpdate(
                 spreadsheetId=self.spreadsheet_id,
                 body={"requests": requests}
             ).execute()
+            logger.info(f"[FORMAT] Risposta batchUpdate: {resp}")
             logger.info(f"Formattazione tab {month_name} completata")
         except Exception as e:
             logger.error(f"Errore nella formattazione tab mensile: {e}")
