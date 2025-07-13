@@ -509,6 +509,7 @@ class GoogleSheetsUpdater:
         except Exception as e:
             logger.error(f"Errore nella formattazione della riga Totali: {e}")
         logger.info(f"Tab {month_name} aggiornata con i dati del giorno {day} e riga Totali")
+        self.format_monthly_sheet(month_name, year)
         return True
 
     def format_only_monthly_sheet(self, month_name: str, year: int):
