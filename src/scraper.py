@@ -5,6 +5,7 @@ Modulo per estrarre dati dai profili Vendors
 
 import time
 import logging
+import platform
 from typing import Dict, List, Tuple
 from datetime import datetime
 from selenium import webdriver
@@ -75,6 +76,17 @@ class VestiaireScraper:
             # Assicurati che punti al file chromedriver corretto
             if driver_path.endswith('THIRD_PARTY_NOTICES.chromedriver'):
                 driver_path = driver_path.replace('THIRD_PARTY_NOTICES.chromedriver', 'chromedriver')
+            
+            # Fix permessi per GitHub Actions (Linux)
+            if platform.system() == "Linux":
+                import stat
+                import os
+                try:
+                    # Imposta permessi di esecuzione sul chromedriver
+                    os.chmod(driver_path, stat.S_IRWXU | stat.S_IRWXG | stat.S_IROTH | stat.S_IXOTH)
+                    logger.info(f"🔧 Permessi chromedriver impostati: {driver_path}")
+                except Exception as e:
+                    logger.warning(f"⚠️ Impossibile impostare permessi chromedriver: {e}")
             
             service = Service(driver_path)
             self.driver = webdriver.Chrome(service=service, options=chrome_options)
