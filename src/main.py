@@ -1,28 +1,69 @@
+#!/usr/bin/env python3
 """
-Vestiaire Monitor - Main Script
-Script principale per l'automazione del monitoraggio Vestiaire
+Vestiaire Monitor - Sistema di monitoraggio automatico
+Aggiornato con debugging avanzato e sistema di performance monitoring
 """
 
-import os
 import sys
+import os
 import logging
-import json
 from datetime import datetime
-from typing import Dict, List, Union
-import time # Aggiunto per la funzione debug_scraping_issue
+import traceback
+from typing import List, Dict
+import json
 
-# Aggiungi il percorso src al path
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+# Aggiungi il percorso corrente al PYTHONPATH
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from scraper import VestiaireScraper
 from sheets_updater import GoogleSheetsUpdater
+from config import PROFILES, PERFORMANCE_THRESHOLDS
 
-# Configurazione logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
+# Configurazione logging migliorata
+def setup_logging():
+    """Configura il logging con file e console"""
+    # Crea la directory logs se non esiste
+    os.makedirs('logs', exist_ok=True)
+    
+    # Nome file con timestamp
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    log_filename = f'logs/vestiaire_monitor_{timestamp}.log'
+    
+    # Configurazione logger
+    logger = logging.getLogger()
+    logger.setLevel(logging.INFO)
+    
+    # Rimuovi handler esistenti
+    for handler in logger.handlers[:]:
+        logger.removeHandler(handler)
+    
+    # Formatter dettagliato
+    formatter = logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+    
+    # Handler per file
+    file_handler = logging.FileHandler(log_filename, encoding='utf-8')
+    file_handler.setLevel(logging.INFO)
+    file_handler.setFormatter(formatter)
+    logger.addHandler(file_handler)
+    
+    # Handler per console
+    console_handler = logging.StreamHandler()
+    console_handler.setLevel(logging.INFO)
+    console_handler.setFormatter(formatter)
+    logger.addHandler(console_handler)
+    
+    # Log anche nella root directory per GitHub Actions
+    root_log = 'vestiaire_monitor.log'
+    root_handler = logging.FileHandler(root_log, encoding='utf-8')
+    root_handler.setLevel(logging.INFO)
+    root_handler.setFormatter(formatter)
+    logger.addHandler(root_handler)
+    
+    return logger
+
+logger = setup_logging()
 
 def load_credentials() -> Dict:
     """Carica le credenziali Google Sheets automaticamente"""
@@ -60,131 +101,117 @@ def load_credentials() -> Dict:
         logger.error(f"Errore nel caricamento delle credenziali: {e}")
         return {}
 
-def main():
-    """Funzione principale del monitoraggio Vestiaire"""
-    start_time = datetime.now()
-    logger.info("=== INIZIO MONITORAGGIO VESTIAIRE ===")
-    
+def save_debug_data(data: Dict, filename: str):
+    """Salva dati di debug in formato JSON"""
     try:
-        # 1. Carica le credenziali
-        credentials = load_credentials()
+        os.makedirs('logs', exist_ok=True)
+        filepath = f'logs/{filename}'
+        with open(filepath, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+        logger.info(f"📝 Dati di debug salvati in {filepath}")
+    except Exception as e:
+        logger.error(f"❌ Errore nel salvataggio debug: {e}")
+
+def main():
+    """Funzione principale con gestione parametri"""
+    try:
+        logger.info("🚀 AVVIO VESTIAIRE MONITOR")
+        logger.info("=" * 50)
         
-        # 2. Esegui lo scraping
-        logger.info("Avvio scraping dei profili Vestiaire...")
-        scraper = VestiaireScraper()
-        scraped_data = scraper.scrape_all_profiles()
+        # Gestione parametri
+        if len(sys.argv) > 1:
+            command = sys.argv[1].lower()
+            
+            if command == "performance":
+                return test_performance()
+            elif command == "debug-scraping":
+                return debug_scraping_issue()
+            elif command == "debug-totali":
+                return debug_totals()
+            elif command == "help":
+                print("🚀 VESTIAIRE MONITOR - Comandi disponibili:")
+                print("  python main.py                  - Esecuzione normale")
+                print("  python main.py performance      - Test performance")
+                print("  python main.py debug-scraping   - Debug scraping")
+                print("  python main.py debug-totali     - Debug calcoli totali")
+                print("  python main.py help             - Mostra questo help")
+                return True
+            else:
+                logger.error(f"❌ Comando '{command}' non riconosciuto. Usa 'help' per vedere i comandi disponibili.")
+                return False
         
-        if not scraped_data:
-            logger.error("Nessun dato estratto dallo scraping")
+        # Esecuzione normale
+        logger.info("🔧 Controllo configurazione ambiente...")
+        
+        # Verifica credenziali
+        credentials_json = os.environ.get('GOOGLE_SHEETS_CREDENTIALS')
+        if not credentials_json:
+            logger.error("❌ Credenziali Google Sheets non trovate")
             return False
         
-        # 2.1 VERIFICA DATI SCRAPATI
-        logger.info("=== VERIFICA DATI SCRAPATI ===")
-        total_articles_scraped = 0
-        total_sales_scraped = 0
-        profiles_with_data = 0
+        logger.info("✅ Credenziali Google Sheets trovate")
         
-        for profile_data in scraped_data:
-            articles = profile_data.get('articles', 0)
-            sales = profile_data.get('sales', 0)
-            total_articles_scraped += articles
-            total_sales_scraped += sales
-            
-            if articles > 0 or sales > 0:
-                profiles_with_data += 1
-            
-            # Log dettagliato per ogni profilo
-            error = profile_data.get('error', '')
-            error_msg = f" [ERRORE: {error}]" if error else ""
-            logger.info(f"  📊 {profile_data['name']}: {articles} articoli, {sales} vendite{error_msg}")
+        # Inizializza scraper
+        logger.info("🔍 Inizializzazione scraper...")
+        scraper = VestiaireScraper()
         
-        logger.info(f"📈 TOTALI SCRAPATI: {total_articles_scraped} articoli, {total_sales_scraped} vendite")
-        logger.info(f"📋 Profili con dati: {profiles_with_data}/{len(scraped_data)}")
+        # Scraping dei dati
+        logger.info("📡 Avvio scraping dei profili...")
+        logger.info(f"📋 Profili da processare: {len(PROFILES)}")
         
-        # 2.2 CONTROLLO QUALITÀ DATI
-        if total_articles_scraped == 0 and total_sales_scraped == 0:
-            logger.error("🚨 ATTENZIONE: Tutti i profili hanno 0 articoli e 0 vendite - possibile fallimento scraping!")
-        elif profiles_with_data < len(scraped_data) * 0.5:  # Meno del 50% dei profili ha dati
-            logger.warning(f"⚠️  ATTENZIONE: Solo {profiles_with_data} profili su {len(scraped_data)} hanno dati")
+        scraped_data = scraper.scrape_all_profiles()
         
-        # 2.3 CONFRONTO CON DATI NOTI (se sembrano dati statici)
-        known_static_totals = {"articles": 16449, "sales": 24950}  # Totali dei dati statici noti
-        if (total_articles_scraped == known_static_totals["articles"] and 
-            total_sales_scraped == known_static_totals["sales"]):
-            logger.warning("⚠️  SOSPETTO: I dati scrapati corrispondono esattamente ai dati statici noti!")
+        # Salva dati di debug
+        debug_data = {
+            'timestamp': datetime.now().isoformat(),
+            'total_profiles': len(PROFILES),
+            'scraped_profiles': len(scraped_data) if scraped_data else 0,
+            'scraped_data': scraped_data if scraped_data else []
+        }
+        save_debug_data(debug_data, f'scraping_debug_{datetime.now().strftime("%Y%m%d_%H%M%S")}.json')
         
-        # 3. Calcola i totali
-        totals = scraper.calculate_totals(scraped_data)
-        logger.info(f"Totale articoli: {totals['total_articles']}")
-        logger.info(f"Totale vendite: {totals['total_sales']}")
+        if not scraped_data:
+            logger.error("❌ Nessun dato recuperato dallo scraping")
+            logger.error("💡 Possibili cause: rete, rate limiting, modifiche siti web")
+            return False
         
-        # 4. Aggiorna Google Sheets se le credenziali sono disponibili
-        if credentials:
-            sheets_start_time = datetime.now()
-            logger.info("Aggiornamento Google Sheets...")
-            
-            # Se le credenziali sono un dict, convertilo in stringa JSON
-            import json as _json
-            if isinstance(credentials, dict):
-                credentials_json = _json.dumps(credentials)
-            else:
-                credentials_json = credentials
-            sheets_updater = GoogleSheetsUpdater(credentials_json)
-            
-            # Aggiorna il foglio principale
-            success = sheets_updater.update_sheet(scraped_data, sheet_name="riepilogo")
-            if success:
-                logger.info("Google Sheets aggiornato con successo")
-            else:
-                logger.error("Errore nell'aggiornamento di Google Sheets")
-            
-            # Aggiorna la tab mensile con logging dettagliato
-            today = datetime.now().date()
-            logger.info(f"📅 Aggiornamento tab mensile per: {today.year}-{today.month:02d}-{today.day:02d}")
-            logger.info(f"📅 Colonna calcolata: giorno {today.day} = colonna base {2 + (today.day-1)*4}")
-            
-            monthly_success = sheets_updater.update_monthly_sheet(scraped_data, today.year, today.month, today.day)
-            if monthly_success:
-                logger.info("Tab mensile aggiornata con successo")
-            else:
-                logger.error("Errore nell'aggiornamento della tab mensile")
-            
-            # Crea il riepilogo
-            sheets_updater.create_summary_sheet(scraped_data)
-            
-            sheets_end_time = datetime.now()
-            sheets_duration = sheets_end_time - sheets_start_time
-            logger.info(f"⏱️ Aggiornamento Google Sheets completato in {sheets_duration.total_seconds():.2f} secondi")
+        logger.info(f"✅ Scraping completato: {len(scraped_data)} profili processati")
+        
+        # Log dettagliato dei dati
+        logger.info("📊 DATI RACCOLTI:")
+        total_articles = 0
+        total_sales = 0
+        
+        for profile in scraped_data:
+            articles = profile.get('articles', 0)
+            sales = profile.get('sales', 0)
+            total_articles += articles
+            total_sales += sales
+            logger.info(f"  📍 {profile.get('name', 'Unknown')}: {articles} articoli, {sales} vendite")
+        
+        logger.info(f"📈 TOTALI: {total_articles} articoli, {total_sales} vendite")
+        
+        # Aggiorna Google Sheets
+        logger.info("📝 Aggiornamento Google Sheets...")
+        updater = GoogleSheetsUpdater(credentials_json)
+        
+        # Aggiorna il foglio mensile
+        now = datetime.now()
+        logger.info(f"📅 Aggiornamento per: {now.day}/{now.month}/{now.year}")
+        
+        success = updater.update_monthly_sheet(scraped_data, now.year, now.month, now.day)
+        
+        if success:
+            logger.info("✅ Aggiornamento Google Sheets completato")
+            logger.info("🎯 Operazione completata con successo!")
+            return True
         else:
-            logger.info("Saltando l'aggiornamento di Google Sheets (nessuna credenziale)")
-        
-        # 5. Log dei risultati
-        logger.info("=== RISULTATI SCRAPING ===")
-        for profile_data in scraped_data:
-            logger.info(f"{profile_data['name']}: {profile_data['articles']} articoli, {profile_data['sales']} vendite")
-        
-        end_time = datetime.now()
-        duration = end_time - start_time
-        logger.info(f"🏁 Monitoraggio completato in {duration.total_seconds():.2f} secondi")
-        
-        # Log statistiche performance se disponibili
-        performance_stats = scraper.get_performance_stats()
-        if performance_stats.get("total_scraping_time"):
-            logger.info(f"📊 Statistiche scraping: {performance_stats['total_scraping_time']:.2f}s totali, {performance_stats['average_profile_time']:.2f}s medi per profilo")
-        
-        # 6. RIEPILOGO FINALE PER DEBUG
-        logger.info("=== RIEPILOGO DEBUG ===")
-        logger.info(f"🕐 Timestamp esecuzione: {datetime.now().isoformat()}")
-        logger.info(f"📊 Dati processati: {len(scraped_data)} profili")
-        logger.info(f"📈 Totali: {total_articles_scraped} articoli, {total_sales_scraped} vendite")
-        logger.info(f"📅 Giorno aggiornato nel foglio: {today.day}")
-        logger.info(f"🔄 Aggiornamento sheets: {'Successo' if monthly_success else 'Fallito'}")
-        
-        return True
-        
+            logger.error("❌ Errore nell'aggiornamento Google Sheets")
+            return False
+            
     except Exception as e:
-        logger.error(f"Errore generale nel monitoraggio: {e}")
-        logger.error(f"Traceback completo:", exc_info=True)
+        logger.error(f"❌ Errore durante l'esecuzione: {e}")
+        logger.error(f"📍 Traceback: {traceback.format_exc()}")
         return False
 
 def test_scraping():
@@ -510,10 +537,11 @@ def debug_totals():
         # Inizializza l'updater
         updater = GoogleSheetsUpdater(credentials_json)
         
-        # Leggi i dati attuali del foglio luglio
+        # Leggi i dati attuali del foglio corrente
         import calendar
-        month_name = "july"
-        year = 2024
+        current_month = datetime.now().month
+        month_name = calendar.month_name[current_month].lower()
+        year = datetime.now().year
         
         print(f"📖 Lettura dati da {month_name} {year}...")
         
