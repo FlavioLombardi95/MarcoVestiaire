@@ -453,12 +453,20 @@ class GoogleSheetsUpdater:
             prev_vendite = None
             if articoli_col-4 < len(row):
                 try:
-                    prev_articoli = int(row[articoli_col-4]) if row[articoli_col-4] else None
-                except:
+                    if row[articoli_col-4]:
+                        clean_val = str(row[articoli_col-4]).replace("'", "").replace(" ", "").strip()
+                        prev_articoli = int(clean_val) if clean_val else None
+                    else:
+                        prev_articoli = None
+                except (ValueError, TypeError):
                     prev_articoli = None
                 try:
-                    prev_vendite = int(row[vendite_col-4]) if row[vendite_col-4] else None
-                except:
+                    if row[vendite_col-4]:
+                        clean_val = str(row[vendite_col-4]).replace("'", "").replace(" ", "").strip()
+                        prev_vendite = int(clean_val) if clean_val else None
+                    else:
+                        prev_vendite = None
+                except (ValueError, TypeError):
                     prev_vendite = None
             diff_stock = articoli - prev_articoli if prev_articoli is not None else ""
             diff_vendite = vendite - prev_vendite if prev_vendite is not None else ""
@@ -479,11 +487,16 @@ class GoogleSheetsUpdater:
             col_sum = 0
             for r in range(1, num_rows):
                 try:
-                    val = int(values[r][c]) if c < len(values[r]) and values[r][c] else 0
-                except:
+                    if c < len(values[r]) and values[r][c]:
+                        # Pulisce il valore da apostrofi e spazi
+                        clean_val = str(values[r][c]).replace("'", "").replace(" ", "").strip()
+                        val = int(clean_val) if clean_val else 0
+                    else:
+                        val = 0
+                except (ValueError, TypeError):
                     val = 0
                 col_sum += val
-            totali_row.append(col_sum if col_sum != 0 else "")
+            totali_row.append(col_sum)  # Sempre mostra il numero, anche se è 0
         # Rimuovi eventuale riga Totali precedente
         values = [row for row in values if not (row and row[0] == "Totali")]
         values.append(totali_row)

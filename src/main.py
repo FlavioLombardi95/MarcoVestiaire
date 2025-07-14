@@ -495,6 +495,139 @@ def debug_scraping_issue():
             scraper.driver.quit()
             logger.info("Driver chiuso")
 
+def debug_totals():
+    """Debug dei calcoli dei totali nelle Google Sheets"""
+    try:
+        print("🔍 DEBUGGING TOTALI GOOGLE SHEETS")
+        print("=" * 50)
+        
+        # Configura le credenziali
+        credentials_json = os.environ.get('GOOGLE_SHEETS_CREDENTIALS')
+        if not credentials_json:
+            print("❌ ERRORE: Credenziali Google Sheets non trovate")
+            return False
+            
+        # Inizializza l'updater
+        updater = GoogleSheetsUpdater(credentials_json)
+        
+        # Leggi i dati attuali del foglio luglio
+        import calendar
+        month_name = "july"
+        year = 2024
+        
+        print(f"📖 Lettura dati da {month_name} {year}...")
+        
+        result = updater.service.spreadsheets().values().get(
+            spreadsheetId=updater.spreadsheet_id,
+            range=f"{month_name}!A:ZZ"
+        ).execute()
+        
+        values = result.get('values', [])
+        if not values:
+            print(f"❌ ERRORE: Tab {month_name} vuota!")
+            return False
+            
+        header = values[0]
+        print(f"📊 Header: {header}")
+        print(f"📊 Numero righe: {len(values)}")
+        
+        # Analizza ogni colonna per i totali
+        print("\n🔢 ANALISI COLONNE E TOTALI:")
+        print("-" * 40)
+        
+        for col_idx in range(2, len(header)):
+            col_name = header[col_idx] if col_idx < len(header) else f"Col_{col_idx}"
+            print(f"\n📋 Colonna {col_idx}: {col_name}")
+            
+            col_sum = 0
+            valid_values = []
+            invalid_values = []
+            
+            # Calcola somma escludendo header e riga totali
+            for row_idx in range(1, len(values)):
+                row = values[row_idx]
+                if row and row[0] == "Totali":
+                    continue  # Salta la riga totali
+                    
+                if col_idx < len(row) and row[col_idx]:
+                    cell_value = row[col_idx]
+                    try:
+                        numeric_val = int(cell_value)
+                        col_sum += numeric_val
+                        valid_values.append(f"R{row_idx+1}: {numeric_val}")
+                    except (ValueError, TypeError):
+                        invalid_values.append(f"R{row_idx+1}: '{cell_value}' (non numerico)")
+                        
+            print(f"✅ Somma calcolata: {col_sum}")
+            print(f"📊 Valori validi: {len(valid_values)}")
+            if len(valid_values) <= 5:
+                for val in valid_values:
+                    print(f"   - {val}")
+            else:
+                print(f"   - Prime 3: {valid_values[:3]}")
+                print(f"   - Ultime 2: {valid_values[-2:]}")
+                    
+            if invalid_values:
+                print(f"⚠️  Valori non numerici: {len(invalid_values)}")
+                for val in invalid_values[:3]:  # Mostra solo i primi 3
+                    print(f"   - {val}")
+                    
+        # Trova la riga dei totali attuale
+        print("\n🎯 RIGA TOTALI ATTUALE:")
+        print("-" * 30)
+        
+        totals_row = None
+        totals_row_idx = None
+        
+        for row_idx, row in enumerate(values):
+            if row and row[0] == "Totali":
+                totals_row = row
+                totals_row_idx = row_idx
+                break
+                
+        if totals_row:
+            print(f"📍 Riga totali trovata alla posizione {totals_row_idx + 1}")
+            print(f"📋 Contenuto: {totals_row}")
+            
+            # Confronta con calcolo corretto
+            print("\n🔍 CONFRONTO CALCOLO CORRETTO:")
+            print("-" * 35)
+            
+            for col_idx in range(2, min(len(header), len(totals_row))):
+                col_name = header[col_idx] if col_idx < len(header) else f"Col_{col_idx}"
+                
+                # Calcola somma corretta
+                correct_sum = 0
+                for row_idx in range(1, len(values)):
+                    row = values[row_idx]
+                    if row and row[0] == "Totali":
+                        continue
+                    if col_idx < len(row) and row[col_idx]:
+                        try:
+                            correct_sum += int(row[col_idx])
+                        except (ValueError, TypeError):
+                            pass
+                            
+                current_total = totals_row[col_idx] if col_idx < len(totals_row) else ""
+                
+                if str(correct_sum) == str(current_total):
+                    print(f"✅ {col_name}: {current_total} (corretto)")
+                else:
+                    print(f"❌ {col_name}: attuale='{current_total}', corretto={correct_sum}")
+                    
+        else:
+            print("⚠️  Nessuna riga totali trovata!")
+            
+        print("\n" + "=" * 50)
+        print("🔍 Debug totali completato")
+        
+        return True
+        
+    except Exception as e:
+        logger.error(f"Errore nel debug totali: {e}")
+        traceback.print_exc()
+        return False
+
 if __name__ == "__main__":
     # Controlla gli argomenti della riga di comando
     if len(sys.argv) > 1:
@@ -513,6 +646,8 @@ if __name__ == "__main__":
             formatta_tab_mensile()
         elif command == "debug-scraping":
             debug_scraping_issue()
+        elif command == "debug-totali":
+            debug_totals()
         elif command == "help":
             print("Comandi disponibili:")
             print("  python main.py              - Esegue il monitoraggio completo")
@@ -523,6 +658,7 @@ if __name__ == "__main__":
             print("  python main.py aggiorna-mensile-statico - Aggiorna tab mensile con dati statici")
             print("  python main.py formatta-mensile - Applica solo la formattazione alla tab mensile")
             print("  python main.py debug-scraping - Debugga il problema dei dati identici")
+            print("  python main.py debug-totali - Debugga i calcoli dei totali nelle Google Sheets")
             print("  python main.py help         - Mostra questo aiuto")
         else:
             print(f"Comando sconosciuto: {command}")
