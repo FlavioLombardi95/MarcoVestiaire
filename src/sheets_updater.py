@@ -156,7 +156,7 @@ class GoogleSheetsUpdater:
             result = self.service.spreadsheets().values().update(
                 spreadsheetId=self.spreadsheet_id,
                 range=range_to_update,
-                valueInputOption='RAW',
+                valueInputOption='USER_ENTERED',
                 body=body
             ).execute()
             logger.info(f"Aggiornamento completato: {result.get('updatedCells')} celle aggiornate")
@@ -166,7 +166,7 @@ class GoogleSheetsUpdater:
             self.service.spreadsheets().values().update(
                 spreadsheetId=self.spreadsheet_id,
                 range=f"{sheet_name}!G1",
-                valueInputOption='RAW',
+                valueInputOption='USER_ENTERED',
                 body={'values': [[timestamp]]}
             ).execute()
             logger.info(f"Timestamp aggiornamento scritto in {sheet_name}!G1: {timestamp}")
@@ -208,7 +208,7 @@ class GoogleSheetsUpdater:
             result = self.service.spreadsheets().values().append(
                 spreadsheetId=self.spreadsheet_id,
                 range=range_name,
-                valueInputOption='RAW',
+                valueInputOption='USER_ENTERED',
                 insertDataOption='INSERT_ROWS',
                 body=body
             ).execute()
@@ -398,7 +398,7 @@ class GoogleSheetsUpdater:
                 self.service.spreadsheets().values().update(
                     spreadsheetId=self.spreadsheet_id,
                     range=f"{month_name}!A1",
-                    valueInputOption='RAW',
+                    valueInputOption='USER_ENTERED',
                     body={'values': [header1, header2]}
                 ).execute()
                 logger.info(f"Intestazioni scritte su '{month_name}'")
@@ -465,10 +465,10 @@ class GoogleSheetsUpdater:
             # Allunga la riga se serve
             while len(row) < diff_vendite_col+1:
                 row.append("")
-            row[articoli_col] = str(articoli)
-            row[vendite_col] = str(vendite)
-            row[diff_stock_col] = str(diff_stock)
-            row[diff_vendite_col] = str(diff_vendite)
+            row[articoli_col] = articoli  # Mantieni come numero
+            row[vendite_col] = vendite    # Mantieni come numero
+            row[diff_stock_col] = diff_stock if diff_stock != "" else ""
+            row[diff_vendite_col] = diff_vendite if diff_vendite != "" else ""
             # Aggiorna la riga in values
             values[row_idx-1] = row
         # Calcola e aggiungi la riga dei totali
@@ -491,7 +491,7 @@ class GoogleSheetsUpdater:
         self.service.spreadsheets().values().update(
             spreadsheetId=self.spreadsheet_id,
             range=f"{month_name}!A1",
-            valueInputOption='RAW',
+            valueInputOption='USER_ENTERED',
             body={'values': values}
         ).execute()
         # Applica sfondo grigio chiaro alla riga Totali
