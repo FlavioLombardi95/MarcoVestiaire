@@ -100,6 +100,14 @@ def main():
             else:
                 logger.error("Errore nell'aggiornamento di Google Sheets")
             
+            # Aggiorna la tab mensile
+            today = datetime.now().date()
+            monthly_success = sheets_updater.update_monthly_sheet(scraped_data, today.year, today.month, today.day)
+            if monthly_success:
+                logger.info("Tab mensile aggiornata con successo")
+            else:
+                logger.error("Errore nell'aggiornamento della tab mensile")
+            
             # Crea il riepilogo
             sheets_updater.create_summary_sheet(scraped_data)
         else:

@@ -483,7 +483,7 @@ class GoogleSheetsUpdater:
                 except:
                     val = 0
                 col_sum += val
-            totali_row.append(str(col_sum) if col_sum != 0 else "")
+            totali_row.append(col_sum if col_sum != 0 else "")
         # Rimuovi eventuale riga Totali precedente
         values = [row for row in values if not (row and row[0] == "Totali")]
         values.append(totali_row)

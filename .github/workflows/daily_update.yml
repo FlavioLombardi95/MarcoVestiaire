@@ -35,7 +35,7 @@ jobs:
         GOOGLE_SHEETS_CREDENTIALS: ${{ secrets.GOOGLE_SHEETS_CREDENTIALS }}
       run: |
         cd src
-        python main.py aggiorna-mensile-statico
+        python main.py
         
     - name: Upload logs
       if: always()
