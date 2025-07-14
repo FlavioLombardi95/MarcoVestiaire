@@ -511,10 +511,11 @@ class GoogleSheetsUpdater:
         # Rimuovi eventuale riga Totali precedente
         values = [row for row in values if not (row and row[0] == "Totali")]
         
-        # Calcola il numero di righe dati (senza header)
-        data_rows = len(values) - 1  # Escludi header (riga 2)
+        # Calcola il numero di righe dati (senza header e senza totali)
+        # values contiene: riga 1 (header date), riga 2 (header colonne), righe 3-N (dati)
+        # La riga dei totali sarà aggiunta come riga N+1
         start_row = 3  # Prima riga dati
-        end_row = start_row + data_rows - 1  # Ultima riga dati
+        end_row = len(values)  # Ultima riga dati (prima di aggiungere i totali)
         
         totali_row = ["Totali", ""]
         for c in range(2, num_cols):
