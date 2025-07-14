@@ -412,24 +412,30 @@ class GoogleSheetsUpdater:
         import copy
         month_name = calendar.month_name[month].lower()
         self.create_monthly_tab(month_name, year)
+        
         # Leggi dati attuali
         result = self.service.spreadsheets().values().get(
             spreadsheetId=self.spreadsheet_id,
             range=f"{month_name}!A:ZZ"
         ).execute()
         values = result.get('values', [])
+        
         if not values:
             logger.error(f"Tab {month_name} vuota!")
             return False
+        
         header = values[0]
+        
         # Mappa profilo->riga
         profilo_to_row = {row[0]: i for i, row in enumerate(values[1:], start=2) if row and row[0]}
+        
         # Calcola colonne da aggiornare
         base_col = 2 + (day-1)*4
         articoli_col = base_col
         vendite_col = base_col+1
         diff_stock_col = base_col+2
         diff_vendite_col = base_col+3
+        
         # Prepara update
         updates = []
         for profilo in scraped_data:
@@ -437,6 +443,7 @@ class GoogleSheetsUpdater:
             url = profilo['url']
             articoli = profilo['articles']
             vendite = profilo['sales']
+            
             # Trova riga
             if name in profilo_to_row:
                 row_idx = profilo_to_row[name]
@@ -448,6 +455,7 @@ class GoogleSheetsUpdater:
                 row_idx = len(values)
                 # Aggiorna mapping
                 profilo_to_row[name] = row_idx
+            
             # Calcola differenze
             prev_articoli = None
             prev_vendite = None
@@ -460,6 +468,7 @@ class GoogleSheetsUpdater:
                         prev_articoli = None
                 except (ValueError, TypeError):
                     prev_articoli = None
+                
                 try:
                     if row[vendite_col-4]:
                         clean_val = str(row[vendite_col-4]).replace("'", "").replace(" ", "").strip()
@@ -468,38 +477,70 @@ class GoogleSheetsUpdater:
                         prev_vendite = None
                 except (ValueError, TypeError):
                     prev_vendite = None
+            
             diff_stock = articoli - prev_articoli if prev_articoli is not None else ""
             diff_vendite = vendite - prev_vendite if prev_vendite is not None else ""
+            
             # Allunga la riga se serve
             while len(row) < diff_vendite_col+1:
                 row.append("")
+            
             row[articoli_col] = articoli  # Mantieni come numero
             row[vendite_col] = vendite    # Mantieni come numero
             row[diff_stock_col] = diff_stock if diff_stock != "" else ""
             row[diff_vendite_col] = diff_vendite if diff_vendite != "" else ""
+            
             # Aggiorna la riga in values
             values[row_idx-1] = row
-        # Calcola e aggiungi la riga dei totali
+        
+        # Funzione helper per convertire indice colonna in lettera
+        def column_index_to_letter(col_idx):
+            """Converte indice colonna (0-based) in lettere (A, B, C, ..., AA, AB, ...)"""
+            result = ""
+            col_idx += 1  # Converti in 1-based
+            while col_idx > 0:
+                col_idx -= 1
+                result = chr(col_idx % 26 + ord('A')) + result
+                col_idx //= 26
+            return result
+        
+        # Calcola e aggiungi la riga dei totali con formule
         num_cols = len(header)
         num_rows = len(values)
-        totali_row = ["Totali", ""]
-        for c in range(2, num_cols):
-            col_sum = 0
-            for r in range(1, num_rows):
-                try:
-                    if c < len(values[r]) and values[r][c]:
-                        # Pulisce il valore da apostrofi e spazi
-                        clean_val = str(values[r][c]).replace("'", "").replace(" ", "").strip()
-                        val = int(clean_val) if clean_val else 0
-                    else:
-                        val = 0
-                except (ValueError, TypeError):
-                    val = 0
-                col_sum += val
-            totali_row.append(col_sum)  # Sempre mostra il numero, anche se è 0
+        
         # Rimuovi eventuale riga Totali precedente
         values = [row for row in values if not (row and row[0] == "Totali")]
+        
+        # Calcola il numero di righe dati (senza header)
+        data_rows = len(values) - 1  # Escludi header (riga 2)
+        start_row = 3  # Prima riga dati
+        end_row = start_row + data_rows - 1  # Ultima riga dati
+        
+        totali_row = ["Totali", ""]
+        for c in range(2, num_cols):
+            # Verifica se questa colonna è per "articoli" o "vendite" (non differenze)
+            col_header = header[c] if c < len(header) else ""
+            is_articles_or_sales = ("articoli" in col_header.lower() or 
+                                   "vendite" in col_header.lower() or 
+                                   # Colonne con pattern giorno: colonna base (articoli) e base+1 (vendite)
+                                   (c-2) % 4 in [0, 1])  # 0=articoli, 1=vendite in ogni gruppo di 4
+            
+            # Verifica se è una colonna differenze
+            is_diff_column = ("diff" in col_header.lower() or 
+                             # Colonne con pattern giorno: colonna base+2 (diff stock) e base+3 (diff vendite)
+                             (c-2) % 4 in [2, 3])  # 2=diff stock, 3=diff vendite in ogni gruppo di 4
+            
+            if is_articles_or_sales or is_diff_column:
+                # Crea formula di somma per tutte le colonne (articoli, vendite, diff stock, diff vendite)
+                col_letter = column_index_to_letter(c)
+                formula = f"=SOMMA({col_letter}{start_row}:{col_letter}{end_row})"
+                totali_row.append(formula)
+            else:
+                # Per altre colonne, metti stringa vuota
+                totali_row.append("")
+        
         values.append(totali_row)
+        
         # Scrivi tutte le righe aggiornate
         self.service.spreadsheets().values().update(
             spreadsheetId=self.spreadsheet_id,
@@ -507,6 +548,7 @@ class GoogleSheetsUpdater:
             valueInputOption='USER_ENTERED',
             body={'values': values}
         ).execute()
+        
         # Applica sfondo grigio chiaro alla riga Totali
         try:
             sheet_id = self._get_sheet_id(month_name)
@@ -527,13 +569,15 @@ class GoogleSheetsUpdater:
                     "fields": "userEnteredFormat.backgroundColor"
                 }
             }]
+            
             self.service.spreadsheets().batchUpdate(
                 spreadsheetId=self.spreadsheet_id,
                 body={"requests": requests}
             ).execute()
         except Exception as e:
             logger.error(f"Errore nella formattazione della riga Totali: {e}")
-        logger.info(f"Tab {month_name} aggiornata con i dati del giorno {day} e riga Totali")
+        
+        logger.info(f"Tab {month_name} aggiornata con i dati del giorno {day} e riga Totali con formule")
         self.format_monthly_sheet(month_name, year)
         return True
 
