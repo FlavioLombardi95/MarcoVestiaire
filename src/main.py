@@ -17,8 +17,11 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from scraper import VestiaireScraper
 from sheets_updater import GoogleSheetsUpdater
-from config import PROFILES, PERFORMANCE_THRESHOLDS
 from credentials_test import CredentialsTest
+
+# Import configurazione dalla root directory
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from config import VESTIAIRE_PROFILES as PROFILES, PERFORMANCE_CONFIG
 
 # Configurazione logging migliorata
 def setup_logging():
