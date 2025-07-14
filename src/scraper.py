@@ -122,6 +122,12 @@ class VestiaireScraper:
             time.sleep(5)
             page_load_time = time.time() - page_load_start
             
+            # Verifica se la pagina è caricata correttamente
+            page_title = self.driver.title
+            if "403" in page_title or "404" in page_title or "error" in page_title.lower():
+                logger.error(f"❌ Pagina di errore rilevata per {profile_name}: {page_title}")
+                raise Exception(f"Pagina di errore: {page_title}")
+            
             # Misurazione tempo di parsing
             parse_start = time.time()
             
@@ -148,18 +154,45 @@ class VestiaireScraper:
             
             # Nuovo algoritmo: estrai i dati direttamente dagli span
             spans = self.driver.find_elements(By.TAG_NAME, "span")
+            articles_found = False
+            sales_found = False
+            
             for s in spans:
                 txt = s.text.strip()
-                if txt.endswith("items for sale"):
+                if txt.endswith("items for sale") or txt.endswith("item for sale"):
                     try:
                         articles = int(txt.split()[0].replace(',', '').replace('.', ''))
-                    except Exception:
+                        articles_found = True
+                        logger.debug(f"  📦 {profile_name}: Trovati {articles} articoli")
+                    except Exception as e:
+                        logger.warning(f"  ⚠️  {profile_name}: Errore parsing articoli da '{txt}': {e}")
                         pass
-                if txt.endswith("sold"):
+                if txt.endswith("sold") and not txt.endswith("items sold"):  # Evita confusione con altre frasi
                     try:
                         sales = int(txt.split()[0].replace(',', '').replace('.', ''))
-                    except Exception:
+                        sales_found = True
+                        logger.debug(f"  💰 {profile_name}: Trovate {sales} vendite")
+                    except Exception as e:
+                        logger.warning(f"  ⚠️  {profile_name}: Errore parsing vendite da '{txt}': {e}")
                         pass
+            
+            # Verifica se i dati sono stati trovati
+            if not articles_found and not sales_found:
+                logger.error(f"❌ {profile_name}: Nessun dato trovato nella pagina!")
+                # Salva screenshot per debug se necessario
+                if hasattr(self.driver, 'save_screenshot'):
+                    try:
+                        screenshot_path = f"debug_{profile_name}_{int(time.time())}.png"
+                        self.driver.save_screenshot(screenshot_path)
+                        logger.info(f"  📸 Screenshot salvato: {screenshot_path}")
+                    except:
+                        pass
+                
+                raise Exception("Nessun dato trovato nella pagina")
+            elif not articles_found:
+                logger.warning(f"⚠️  {profile_name}: Articoli non trovati, uso 0")
+            elif not sales_found:
+                logger.warning(f"⚠️  {profile_name}: Vendite non trovate, uso 0")
             
             parse_time = time.time() - parse_start
             total_profile_time = time.time() - profile_start_time
@@ -170,7 +203,8 @@ class VestiaireScraper:
                 "page_load_time": page_load_time,
                 "parse_time": parse_time,
                 "articles": articles,
-                "sales": sales
+                "sales": sales,
+                "data_found": articles_found or sales_found
             }
             
             # Aggiorna fastest/slowest
@@ -193,6 +227,12 @@ class VestiaireScraper:
                 "articles": articles,
                 "sales": sales,
                 "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+                "success": True,
+                "data_quality": {
+                    "articles_found": articles_found,
+                    "sales_found": sales_found,
+                    "page_title": page_title
+                },
                 "performance": {
                     "total_time": total_profile_time,
                     "page_load_time": page_load_time,
@@ -200,6 +240,7 @@ class VestiaireScraper:
                 }
             }
         except Exception as e:
+            total_profile_time = time.time() - profile_start_time
             logger.error(f"❌ Errore nello scraping del profilo {profile_name}: {e}")
             return {
                 "name": profile_name,
@@ -208,7 +249,13 @@ class VestiaireScraper:
                 "articles": 0,
                 "sales": 0,
                 "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
-                "error": str(e)
+                "success": False,
+                "error": str(e),
+                "performance": {
+                    "total_time": total_profile_time,
+                    "page_load_time": 0,
+                    "parse_time": 0
+                }
             }
     
     def scrape_all_profiles(self) -> List[Dict]:

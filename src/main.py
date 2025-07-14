@@ -9,6 +9,7 @@ import logging
 import json
 from datetime import datetime
 from typing import Dict, List, Union
+import time # Aggiunto per la funzione debug_scraping_issue
 
 # Aggiungi il percorso src al path
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -77,6 +78,41 @@ def main():
             logger.error("Nessun dato estratto dallo scraping")
             return False
         
+        # 2.1 VERIFICA DATI SCRAPATI
+        logger.info("=== VERIFICA DATI SCRAPATI ===")
+        total_articles_scraped = 0
+        total_sales_scraped = 0
+        profiles_with_data = 0
+        
+        for profile_data in scraped_data:
+            articles = profile_data.get('articles', 0)
+            sales = profile_data.get('sales', 0)
+            total_articles_scraped += articles
+            total_sales_scraped += sales
+            
+            if articles > 0 or sales > 0:
+                profiles_with_data += 1
+            
+            # Log dettagliato per ogni profilo
+            error = profile_data.get('error', '')
+            error_msg = f" [ERRORE: {error}]" if error else ""
+            logger.info(f"  📊 {profile_data['name']}: {articles} articoli, {sales} vendite{error_msg}")
+        
+        logger.info(f"📈 TOTALI SCRAPATI: {total_articles_scraped} articoli, {total_sales_scraped} vendite")
+        logger.info(f"📋 Profili con dati: {profiles_with_data}/{len(scraped_data)}")
+        
+        # 2.2 CONTROLLO QUALITÀ DATI
+        if total_articles_scraped == 0 and total_sales_scraped == 0:
+            logger.error("🚨 ATTENZIONE: Tutti i profili hanno 0 articoli e 0 vendite - possibile fallimento scraping!")
+        elif profiles_with_data < len(scraped_data) * 0.5:  # Meno del 50% dei profili ha dati
+            logger.warning(f"⚠️  ATTENZIONE: Solo {profiles_with_data} profili su {len(scraped_data)} hanno dati")
+        
+        # 2.3 CONFRONTO CON DATI NOTI (se sembrano dati statici)
+        known_static_totals = {"articles": 16449, "sales": 24950}  # Totali dei dati statici noti
+        if (total_articles_scraped == known_static_totals["articles"] and 
+            total_sales_scraped == known_static_totals["sales"]):
+            logger.warning("⚠️  SOSPETTO: I dati scrapati corrispondono esattamente ai dati statici noti!")
+        
         # 3. Calcola i totali
         totals = scraper.calculate_totals(scraped_data)
         logger.info(f"Totale articoli: {totals['total_articles']}")
@@ -102,8 +138,11 @@ def main():
             else:
                 logger.error("Errore nell'aggiornamento di Google Sheets")
             
-            # Aggiorna la tab mensile
+            # Aggiorna la tab mensile con logging dettagliato
             today = datetime.now().date()
+            logger.info(f"📅 Aggiornamento tab mensile per: {today.year}-{today.month:02d}-{today.day:02d}")
+            logger.info(f"📅 Colonna calcolata: giorno {today.day} = colonna base {2 + (today.day-1)*4}")
+            
             monthly_success = sheets_updater.update_monthly_sheet(scraped_data, today.year, today.month, today.day)
             if monthly_success:
                 logger.info("Tab mensile aggiornata con successo")
@@ -133,10 +172,19 @@ def main():
         if performance_stats.get("total_scraping_time"):
             logger.info(f"📊 Statistiche scraping: {performance_stats['total_scraping_time']:.2f}s totali, {performance_stats['average_profile_time']:.2f}s medi per profilo")
         
+        # 6. RIEPILOGO FINALE PER DEBUG
+        logger.info("=== RIEPILOGO DEBUG ===")
+        logger.info(f"🕐 Timestamp esecuzione: {datetime.now().isoformat()}")
+        logger.info(f"📊 Dati processati: {len(scraped_data)} profili")
+        logger.info(f"📈 Totali: {total_articles_scraped} articoli, {total_sales_scraped} vendite")
+        logger.info(f"📅 Giorno aggiornato nel foglio: {today.day}")
+        logger.info(f"🔄 Aggiornamento sheets: {'Successo' if monthly_success else 'Fallito'}")
+        
         return True
         
     except Exception as e:
         logger.error(f"Errore generale nel monitoraggio: {e}")
+        logger.error(f"Traceback completo:", exc_info=True)
         return False
 
 def test_scraping():
@@ -341,6 +389,112 @@ def formatta_tab_mensile():
     sheets_updater.format_only_monthly_sheet(month_name, today.year)
     logger.info("Formattazione tab mensile completata!")
 
+def debug_scraping_issue():
+    """Funzione specifica per debuggare il problema dei dati identici"""
+    logger.info("=== DEBUG PROBLEMA DATI IDENTICI ===")
+    
+    try:
+        scraper = VestiaireScraper()
+        
+        # Test solo su 2-3 profili per velocità
+        test_profiles = {
+            "Rediscover": "2039815",
+            "Volodymyr": "5924329",
+            "stephanie": "9168643"
+        }
+        
+        logger.info(f"🔍 Test scraping su {len(test_profiles)} profili...")
+        
+        results = []
+        for profile_name, profile_id in test_profiles.items():
+            logger.info(f"\n--- Test profilo: {profile_name} ---")
+            result = scraper.scrape_profile(profile_name, profile_id)
+            results.append(result)
+            
+            # Analisi dettagliata del risultato
+            success = result.get('success', False)
+            articles = result.get('articles', 0)
+            sales = result.get('sales', 0)
+            error = result.get('error', '')
+            data_quality = result.get('data_quality', {})
+            
+            print(f"✅ Successo: {success}")
+            print(f"📦 Articoli: {articles}")
+            print(f"💰 Vendite: {sales}")
+            if error:
+                print(f"❌ Errore: {error}")
+            if data_quality:
+                print(f"🔍 Qualità dati: {data_quality}")
+            
+            # Verifica se i dati corrispondono ai valori statici noti
+            static_data = {
+                "Rediscover": {"articles": 592, "sales": 7217},
+                "Volodymyr": {"articles": 0, "sales": 0},
+                "stephanie": {"articles": 565, "sales": 801}
+            }
+            
+            if profile_name in static_data:
+                expected = static_data[profile_name]
+                if articles == expected["articles"] and sales == expected["sales"]:
+                    print(f"⚠️  SOSPETTO: Dati identici ai valori statici noti!")
+                else:
+                    print(f"✅ Dati diversi dai valori statici (buon segno)")
+            
+            time.sleep(2)  # Pausa tra profili
+        
+        # Analisi globale
+        print("\n" + "="*60)
+        print("📊 ANALISI GLOBALE")
+        print("="*60)
+        
+        total_articles = sum(r.get('articles', 0) for r in results)
+        total_sales = sum(r.get('sales', 0) for r in results)
+        successful_profiles = sum(1 for r in results if r.get('success', False))
+        
+        print(f"Profili con successo: {successful_profiles}/{len(results)}")
+        print(f"Totale articoli: {total_articles}")
+        print(f"Totale vendite: {total_sales}")
+        
+        # Controllo contro dati statici noti (parziali)
+        known_partial_totals = {"articles": 1157, "sales": 8018}  # Totali dei 3 profili test
+        if total_articles == known_partial_totals["articles"] and total_sales == known_partial_totals["sales"]:
+            print("🚨 PROBLEMA CONFERMATO: I dati sono identici ai valori statici!")
+            print("   Possibili cause:")
+            print("   1. Lo scraping fallisce e restituisce valori di default")
+            print("   2. Vestiaire ha modificato la struttura HTML")
+            print("   3. Problemi di rete o rate limiting")
+        else:
+            print("✅ I dati sembrano essere reali (diversi dai valori statici)")
+        
+        # Test specifico per verificare se il problema è nel calcolo delle differenze
+        print(f"\n🔧 TEST CALCOLO DIFFERENZE:")
+        print(f"Se questi fossero dati per il giorno 15 luglio:")
+        for result in results:
+            name = result['name']
+            articles = result['articles']
+            sales = result['sales']
+            
+            # Simula i dati del giorno precedente (14 luglio) = stessi valori
+            prev_articles = articles  # Stesso valore = diff 0
+            prev_sales = sales        # Stesso valore = diff 0
+            
+            diff_articles = articles - prev_articles
+            diff_sales = sales - prev_sales
+            
+            print(f"  {name}: {articles} articoli (diff: {diff_articles}), {sales} vendite (diff: {diff_sales})")
+        
+        print("Se tutti i diff sono 0, significa che i dati sono identici al giorno precedente")
+        
+        return True
+        
+    except Exception as e:
+        logger.error(f"Errore nel debug: {e}")
+        return False
+    finally:
+        if hasattr(scraper, 'driver') and scraper.driver:
+            scraper.driver.quit()
+            logger.info("Driver chiuso")
+
 if __name__ == "__main__":
     # Controlla gli argomenti della riga di comando
     if len(sys.argv) > 1:
@@ -357,6 +511,8 @@ if __name__ == "__main__":
             aggiorna_tab_mensile_statico()
         elif command == "formatta-mensile":
             formatta_tab_mensile()
+        elif command == "debug-scraping":
+            debug_scraping_issue()
         elif command == "help":
             print("Comandi disponibili:")
             print("  python main.py              - Esegue il monitoraggio completo")
@@ -366,6 +522,7 @@ if __name__ == "__main__":
             print("  python main.py aggiorna-statico - Aggiorna sheet solo con dati statici")
             print("  python main.py aggiorna-mensile-statico - Aggiorna tab mensile con dati statici")
             print("  python main.py formatta-mensile - Applica solo la formattazione alla tab mensile")
+            print("  python main.py debug-scraping - Debugga il problema dei dati identici")
             print("  python main.py help         - Mostra questo aiuto")
         else:
             print(f"Comando sconosciuto: {command}")
