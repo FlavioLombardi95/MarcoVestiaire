@@ -84,7 +84,9 @@ def main():
         
         # 4. Aggiorna Google Sheets se le credenziali sono disponibili
         if credentials:
+            sheets_start_time = datetime.now()
             logger.info("Aggiornamento Google Sheets...")
+            
             # Se le credenziali sono un dict, convertilo in stringa JSON
             import json as _json
             if isinstance(credentials, dict):
@@ -110,6 +112,10 @@ def main():
             
             # Crea il riepilogo
             sheets_updater.create_summary_sheet(scraped_data)
+            
+            sheets_end_time = datetime.now()
+            sheets_duration = sheets_end_time - sheets_start_time
+            logger.info(f"⏱️ Aggiornamento Google Sheets completato in {sheets_duration.total_seconds():.2f} secondi")
         else:
             logger.info("Saltando l'aggiornamento di Google Sheets (nessuna credenziale)")
         
@@ -120,7 +126,12 @@ def main():
         
         end_time = datetime.now()
         duration = end_time - start_time
-        logger.info(f"Monitoraggio completato in {duration.total_seconds():.2f} secondi")
+        logger.info(f"🏁 Monitoraggio completato in {duration.total_seconds():.2f} secondi")
+        
+        # Log statistiche performance se disponibili
+        performance_stats = scraper.get_performance_stats()
+        if performance_stats.get("total_scraping_time"):
+            logger.info(f"📊 Statistiche scraping: {performance_stats['total_scraping_time']:.2f}s totali, {performance_stats['average_profile_time']:.2f}s medi per profilo")
         
         return True
         
@@ -149,6 +160,85 @@ def test_scraping():
         logger.error(f"Errore nel test: {e}")
         return False
 
+def test_performance():
+    """Funzione specifica per testare le performance dello scraping"""
+    logger.info("=== TEST PERFORMANCE SCRAPING ===")
+    
+    try:
+        scraper = VestiaireScraper()
+        
+        # Esegui lo scraping con monitoraggio completo
+        results = scraper.scrape_all_profiles()
+        
+        # Ottieni statistiche dettagliate
+        stats = scraper.get_performance_stats()
+        
+        print("\n" + "="*70)
+        print("🚀 ANALISI PERFORMANCE DETTAGLIATA")
+        print("="*70)
+        
+        # Benchmark generale
+        print("⚡ BENCHMARK GENERALE:")
+        print(f"   Setup driver: {stats['driver_setup_time']:.2f}s")
+        print(f"   Scraping totale: {stats['total_scraping_time']:.2f}s")
+        print(f"   Tempo medio per profilo: {stats['average_profile_time']:.2f}s")
+        print(f"   Profili per minuto: {60 / stats['average_profile_time']:.1f}")
+        
+        # Analisi velocità
+        print("\n🏆 ANALISI VELOCITÀ:")
+        print(f"   Più veloce: {stats['fastest_profile']['name']} ({stats['fastest_profile']['time']:.2f}s)")
+        print(f"   Più lento: {stats['slowest_profile']['name']} ({stats['slowest_profile']['time']:.2f}s)")
+        
+        # Confronto con soglie di performance
+        print("\n📊 VALUTAZIONE PERFORMANCE:")
+        avg_time = stats['average_profile_time']
+        if avg_time < 8:
+            performance_rating = "🟢 ECCELLENTE"
+        elif avg_time < 12:
+            performance_rating = "🟡 BUONA"
+        else:
+            performance_rating = "🔴 LENTA"
+        print(f"   Rating: {performance_rating}")
+        
+        # Suggerimenti di ottimizzazione
+        print("\n💡 SUGGERIMENTI OTTIMIZZAZIONE:")
+        total_wait_time = (len(scraper.profiles) - 1) * 3
+        active_work_time = stats['total_scraping_time'] - total_wait_time
+        efficiency = (active_work_time / stats['total_scraping_time']) * 100
+        
+        print(f"   Efficienza attuale: {efficiency:.1f}%")
+        if efficiency < 50:
+            print("   ⚠️  Considerare riduzione tempi di attesa")
+        if avg_time > 10:
+            print("   ⚠️  Considerare ottimizzazione parsing HTML")
+        
+        # Test di velocità di rete
+        print("\n🌐 TEST VELOCITÀ RETE:")
+        fastest_load = min(data['page_load_time'] for data in stats['profile_times'].values())
+        slowest_load = max(data['page_load_time'] for data in stats['profile_times'].values())
+        avg_load = sum(data['page_load_time'] for data in stats['profile_times'].values()) / len(stats['profile_times'])
+        
+        print(f"   Caricamento più veloce: {fastest_load:.2f}s")
+        print(f"   Caricamento più lento: {slowest_load:.2f}s")
+        print(f"   Caricamento medio: {avg_load:.2f}s")
+        
+        if avg_load > 7:
+            print("   ⚠️  Connessione lenta rilevata")
+        
+        # Proiezioni per diversi scenari
+        print("\n📈 PROIEZIONI SCALABILITÀ:")
+        profiles_per_hour = 3600 / (stats['average_profile_time'] + 3)  # +3 per pausa
+        print(f"   Profili processabili per ora: {profiles_per_hour:.0f}")
+        print(f"   Tempo per 100 profili: {(100 * (stats['average_profile_time'] + 3)) / 60:.1f} minuti")
+        
+        print("="*70)
+        
+        return True
+        
+    except Exception as e:
+        logger.error(f"Errore nel test performance: {e}")
+        return False
+
 def test_sheets():
     """Funzione di test per Google Sheets"""
     logger.info("=== TEST GOOGLE SHEETS ===")
@@ -156,26 +246,23 @@ def test_sheets():
     try:
         credentials = load_credentials()
         if not credentials:
-            logger.warning("Nessuna credenziale disponibile per il test")
+            logger.error("Nessuna credenziale trovata per il test")
             return False
-        # Se le credenziali sono un dict, convertilo in stringa JSON
+        
+        # Test con dati fittizi
+        test_data = [
+            {"name": "Test Profile", "url": "https://example.com", "articles": 100, "sales": 50, "timestamp": "2024-01-01 12:00:00"}
+        ]
+        
         import json as _json
         if isinstance(credentials, dict):
             credentials_json = _json.dumps(credentials)
         else:
             credentials_json = credentials
-        # Dati di test
-        test_data = [
-            {
-                "name": "Test Profile",
-                "url": "https://test.com",
-                "articles": 100,
-                "sales": 50,
-                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            }
-        ]
+            
         sheets_updater = GoogleSheetsUpdater(credentials_json)
         success = sheets_updater.update_sheet(test_data, sheet_name="riepilogo")
+        
         if success:
             logger.info("Test Google Sheets completato con successo")
         else:
@@ -260,6 +347,8 @@ if __name__ == "__main__":
         command = sys.argv[1].lower()
         if command == "test":
             test_scraping()
+        elif command == "performance":
+            test_performance()
         elif command == "test-sheets":
             test_sheets()
         elif command == "aggiorna-statico":
@@ -270,13 +359,14 @@ if __name__ == "__main__":
             formatta_tab_mensile()
         elif command == "help":
             print("Comandi disponibili:")
-            print("  python main.py          - Esegue il monitoraggio completo")
-            print("  python main.py test     - Testa solo lo scraping")
-            print("  python main.py test-sheets - Testa solo Google Sheets")
-            print("  python main.py aggiorna-statico - Aggiorna sheet solo con dati statici, cancellando tutto prima")
-            print("  python main.py aggiorna-mensile-statico - Aggiorna la tab mensile con dati statici e logica nuova")
-            print("  python main.py formatta-mensile - Applica solo la formattazione alla tab del mese corrente")
-            print("  python main.py help     - Mostra questo aiuto")
+            print("  python main.py              - Esegue il monitoraggio completo")
+            print("  python main.py test         - Testa solo lo scraping")
+            print("  python main.py performance  - Test dettagliato delle performance")
+            print("  python main.py test-sheets  - Testa solo Google Sheets")
+            print("  python main.py aggiorna-statico - Aggiorna sheet solo con dati statici")
+            print("  python main.py aggiorna-mensile-statico - Aggiorna tab mensile con dati statici")
+            print("  python main.py formatta-mensile - Applica solo la formattazione alla tab mensile")
+            print("  python main.py help         - Mostra questo aiuto")
         else:
             print(f"Comando sconosciuto: {command}")
             print("Usa 'python main.py help' per vedere i comandi disponibili")

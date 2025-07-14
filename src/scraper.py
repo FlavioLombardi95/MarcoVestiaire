@@ -6,6 +6,7 @@ Modulo per estrarre dati dai profili Vendors
 import time
 import logging
 from typing import Dict, List, Tuple
+from datetime import datetime
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
@@ -37,10 +38,21 @@ class VestiaireScraper:
             "Vintageandkickz": "19199976",
             "Vintage & Modern": "29517320"
         }
+        # Statistiche performance
+        self.performance_stats = {
+            "driver_setup_time": 0,
+            "total_scraping_time": 0,
+            "profile_times": {},
+            "average_profile_time": 0,
+            "fastest_profile": {"name": "", "time": float('inf')},
+            "slowest_profile": {"name": "", "time": 0}
+        }
     
     def setup_driver(self):
         """Configura il driver Chrome per lo scraping"""
+        start_time = time.time()
         try:
+            logger.info("⏱️ Configurazione driver Chrome in corso...")
             chrome_options = Options()
             chrome_options.add_argument("--headless")
             chrome_options.add_argument("--no-sandbox")
@@ -66,7 +78,10 @@ class VestiaireScraper:
             
             service = Service(driver_path)
             self.driver = webdriver.Chrome(service=service, options=chrome_options)
-            logger.info("Driver Chrome configurato con successo")
+            
+            setup_time = time.time() - start_time
+            self.performance_stats["driver_setup_time"] = setup_time
+            logger.info(f"✅ Driver Chrome configurato in {setup_time:.2f} secondi")
             
         except Exception as e:
             logger.error(f"Errore nella configurazione del driver: {e}")
@@ -92,12 +107,23 @@ class VestiaireScraper:
         """Scrapa un singolo profilo Vestiaire"""
         url = f"https://it.vestiairecollective.com/profile/{profile_id}/?sortBy=relevance&tab=items-for-sale"
         
+        profile_start_time = time.time()
+        articles = 0
+        sales = 0
+        
         try:
-            logger.info(f"Scraping profilo: {profile_name} ({profile_id})")
+            logger.info(f"🔍 Scraping profilo: {profile_name} ({profile_id})")
+            
+            # Misurazione tempo di caricamento pagina
+            page_load_start = time.time()
             self.driver.get(url)
             
             # Attendi il caricamento della pagina
             time.sleep(5)
+            page_load_time = time.time() - page_load_start
+            
+            # Misurazione tempo di parsing
+            parse_start = time.time()
             
             # DEBUG: stampa tutti i testi di <span> e <div> per il primo profilo
             if profile_name == "Rediscover":
@@ -135,17 +161,46 @@ class VestiaireScraper:
                     except Exception:
                         pass
             
-            logger.info(f"Profilo {profile_name}: {articles} in vendita, {sales} venduti")
+            parse_time = time.time() - parse_start
+            total_profile_time = time.time() - profile_start_time
+            
+            # Salva statistiche profilo
+            self.performance_stats["profile_times"][profile_name] = {
+                "total_time": total_profile_time,
+                "page_load_time": page_load_time,
+                "parse_time": parse_time,
+                "articles": articles,
+                "sales": sales
+            }
+            
+            # Aggiorna fastest/slowest
+            if total_profile_time < self.performance_stats["fastest_profile"]["time"]:
+                self.performance_stats["fastest_profile"] = {
+                    "name": profile_name,
+                    "time": total_profile_time
+                }
+            if total_profile_time > self.performance_stats["slowest_profile"]["time"]:
+                self.performance_stats["slowest_profile"] = {
+                    "name": profile_name,
+                    "time": total_profile_time
+                }
+            
+            logger.info(f"✅ {profile_name}: {articles} articoli, {sales} vendite (⏱️ {total_profile_time:.2f}s)")
             return {
                 "name": profile_name,
                 "profile_id": profile_id,
                 "url": url,
                 "articles": articles,
                 "sales": sales,
-                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S")
+                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+                "performance": {
+                    "total_time": total_profile_time,
+                    "page_load_time": page_load_time,
+                    "parse_time": parse_time
+                }
             }
         except Exception as e:
-            logger.error(f"Errore nello scraping del profilo {profile_name}: {e}")
+            logger.error(f"❌ Errore nello scraping del profilo {profile_name}: {e}")
             return {
                 "name": profile_name,
                 "profile_id": profile_id,
@@ -162,23 +217,75 @@ class VestiaireScraper:
             self.setup_driver()
         
         results = []
+        scraping_start_time = time.time()
         
         try:
-            for profile_name, profile_id in self.profiles.items():
+            total_profiles = len(self.profiles)
+            logger.info(f"🚀 Avvio scraping di {total_profiles} profili...")
+            
+            for i, (profile_name, profile_id) in enumerate(self.profiles.items(), 1):
+                logger.info(f"📊 Progresso: {i}/{total_profiles}")
+                
                 result = self.scrape_profile(profile_name, profile_id)
                 results.append(result)
                 
                 # Pausa tra le richieste per evitare rate limiting
-                time.sleep(3)
+                if i < total_profiles:  # Non aspettare dopo l'ultimo profilo
+                    logger.info("⏳ Pausa 3 secondi...")
+                    time.sleep(3)
                 
         except Exception as e:
             logger.error(f"Errore generale nello scraping: {e}")
         finally:
             if self.driver:
                 self.driver.quit()
-                logger.info("Driver Chrome chiuso")
+                logger.info("🔄 Driver Chrome chiuso")
+        
+        # Calcola statistiche finali
+        total_scraping_time = time.time() - scraping_start_time
+        self.performance_stats["total_scraping_time"] = total_scraping_time
+        
+        valid_times = [stats["total_time"] for stats in self.performance_stats["profile_times"].values()]
+        if valid_times:
+            self.performance_stats["average_profile_time"] = sum(valid_times) / len(valid_times)
+        
+        self._log_performance_summary()
         
         return results
+    
+    def _log_performance_summary(self):
+        """Mostra un riassunto delle performance"""
+        stats = self.performance_stats
+        
+        print("\n" + "="*60)
+        print("📊 REPORT PERFORMANCE SCRAPING")
+        print("="*60)
+        print(f"⏱️  Tempo setup driver: {stats['driver_setup_time']:.2f}s")
+        print(f"⏱️  Tempo totale scraping: {stats['total_scraping_time']:.2f}s")
+        print(f"⏱️  Tempo medio per profilo: {stats['average_profile_time']:.2f}s")
+        print(f"🏆 Profilo più veloce: {stats['fastest_profile']['name']} ({stats['fastest_profile']['time']:.2f}s)")
+        print(f"🐌 Profilo più lento: {stats['slowest_profile']['name']} ({stats['slowest_profile']['time']:.2f}s)")
+        print(f"👥 Profili processati: {len(stats['profile_times'])}")
+        
+        print("\n📋 DETTAGLI PER PROFILO:")
+        print("-" * 60)
+        for name, data in stats["profile_times"].items():
+            print(f"{name:20} | {data['total_time']:6.2f}s | Load: {data['page_load_time']:5.2f}s | Parse: {data['parse_time']:5.2f}s")
+        
+        # Calcolo efficienza
+        total_wait_time = (len(self.profiles) - 1) * 3  # 3 secondi tra profili
+        active_work_time = stats['total_scraping_time'] - total_wait_time
+        efficiency = (active_work_time / stats['total_scraping_time']) * 100 if stats['total_scraping_time'] > 0 else 0
+        
+        print(f"\n⚡ EFFICIENZA:")
+        print(f"   Tempo di lavoro effettivo: {active_work_time:.2f}s")
+        print(f"   Tempo di attesa totale: {total_wait_time:.2f}s")
+        print(f"   Efficienza: {efficiency:.1f}%")
+        print("="*60)
+    
+    def get_performance_stats(self) -> Dict:
+        """Restituisce le statistiche di performance"""
+        return self.performance_stats
     
     def calculate_totals(self, results: List[Dict]) -> Dict:
         """Calcola i totali degli articoli e vendite"""
