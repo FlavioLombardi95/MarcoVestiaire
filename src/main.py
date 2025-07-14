@@ -18,12 +18,14 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from scraper import VestiaireScraper
 from sheets_updater import GoogleSheetsUpdater
 from config import PROFILES, PERFORMANCE_THRESHOLDS
+from credentials_test import CredentialsTest
 
 # Configurazione logging migliorata
 def setup_logging():
     """Configura il logging con file e console"""
-    # Crea la directory logs se non esiste
+    # Crea le directory logs se non esistono
     os.makedirs('logs', exist_ok=True)
+    os.makedirs('../logs', exist_ok=True)  # Per GitHub Actions
     
     # Nome file con timestamp
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -42,7 +44,7 @@ def setup_logging():
         '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     )
     
-    # Handler per file
+    # Handler per file in src/logs/
     file_handler = logging.FileHandler(log_filename, encoding='utf-8')
     file_handler.setLevel(logging.INFO)
     file_handler.setFormatter(formatter)
@@ -54,12 +56,20 @@ def setup_logging():
     console_handler.setFormatter(formatter)
     logger.addHandler(console_handler)
     
-    # Log anche nella root directory per GitHub Actions
-    root_log = 'vestiaire_monitor.log'
-    root_handler = logging.FileHandler(root_log, encoding='utf-8')
-    root_handler.setLevel(logging.INFO)
-    root_handler.setFormatter(formatter)
-    logger.addHandler(root_handler)
+    # Log nella root directory per GitHub Actions
+    try:
+        root_log = '../vestiaire_monitor.log'
+        root_handler = logging.FileHandler(root_log, encoding='utf-8')
+        root_handler.setLevel(logging.INFO)
+        root_handler.setFormatter(formatter)
+        logger.addHandler(root_handler)
+    except:
+        # Se fallisce, prova nella directory corrente
+        root_log = 'vestiaire_monitor.log'
+        root_handler = logging.FileHandler(root_log, encoding='utf-8')
+        root_handler.setLevel(logging.INFO)
+        root_handler.setFormatter(formatter)
+        logger.addHandler(root_handler)
     
     return logger
 
@@ -105,10 +115,22 @@ def save_debug_data(data: Dict, filename: str):
     """Salva dati di debug in formato JSON"""
     try:
         os.makedirs('logs', exist_ok=True)
+        os.makedirs('../logs', exist_ok=True)  # Per GitHub Actions
+        
+        # Salva in src/logs/
         filepath = f'logs/{filename}'
         with open(filepath, 'w', encoding='utf-8') as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
-        logger.info(f"📝 Dati di debug salvati in {filepath}")
+        
+        # Salva anche nella root per GitHub Actions
+        try:
+            root_filepath = f'../{filename}'
+            with open(root_filepath, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+            logger.info(f"📝 Dati di debug salvati in {filepath} e {root_filepath}")
+        except:
+            logger.info(f"📝 Dati di debug salvati in {filepath}")
+            
     except Exception as e:
         logger.error(f"❌ Errore nel salvataggio debug: {e}")
 
@@ -128,12 +150,15 @@ def main():
                 return debug_scraping_issue()
             elif command == "debug-totali":
                 return debug_totals()
+            elif command == "test-credentials":
+                return test_credentials()
             elif command == "help":
                 print("🚀 VESTIAIRE MONITOR - Comandi disponibili:")
                 print("  python main.py                  - Esecuzione normale")
                 print("  python main.py performance      - Test performance")
                 print("  python main.py debug-scraping   - Debug scraping")
                 print("  python main.py debug-totali     - Debug calcoli totali")
+                print("  python main.py test-credentials - Test credenziali Google Sheets")
                 print("  python main.py help             - Mostra questo help")
                 return True
             else:
@@ -150,6 +175,18 @@ def main():
             return False
         
         logger.info("✅ Credenziali Google Sheets trovate")
+        
+        # Test connessione Google Sheets
+        logger.info("🔍 Test connessione Google Sheets...")
+        try:
+            updater = GoogleSheetsUpdater(credentials_json)
+            if not updater.service:
+                logger.error("❌ Impossibile configurare il servizio Google Sheets")
+                return False
+            logger.info("✅ Connessione Google Sheets OK")
+        except Exception as e:
+            logger.error(f"❌ Errore nella connessione Google Sheets: {e}")
+            return False
         
         # Inizializza scraper
         logger.info("🔍 Inizializzazione scraper...")
@@ -193,7 +230,7 @@ def main():
         
         # Aggiorna Google Sheets
         logger.info("📝 Aggiornamento Google Sheets...")
-        updater = GoogleSheetsUpdater(credentials_json)
+        # Riutilizza la stessa istanza testata prima
         
         # Aggiorna il foglio mensile
         now = datetime.now()
@@ -653,6 +690,34 @@ def debug_totals():
         
     except Exception as e:
         logger.error(f"Errore nel debug totali: {e}")
+        traceback.print_exc()
+        return False
+
+def test_credentials():
+    """Test delle credenziali Google Sheets"""
+    try:
+        logger.info("🔍 TEST CREDENZIALI GOOGLE SHEETS")
+        logger.info("=" * 50)
+        
+        # Ottieni credenziali
+        credentials_json = os.environ.get('GOOGLE_SHEETS_CREDENTIALS')
+        if not credentials_json:
+            logger.error("❌ Credenziali non trovate nelle variabili d'ambiente")
+            return False
+        
+        # Esegui test
+        tester = CredentialsTest()
+        success = tester.test_credentials(credentials_json)
+        
+        if success:
+            logger.info("✅ Test credenziali completato con successo!")
+        else:
+            logger.error("❌ Test credenziali fallito!")
+            
+        return success
+        
+    except Exception as e:
+        logger.error(f"Errore nel test credenziali: {e}")
         traceback.print_exc()
         return False
 
