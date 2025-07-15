@@ -1,9 +1,11 @@
-name: Vestiaire Monitor (ogni 15 minuti)
+name: Vestiaire Monitor (11:30 e 23:30 CET)
 
 on:
   schedule:
-    # Esegui ogni 15 minuti
-    - cron: '*/15 * * * *'
+    # Esegui alle 11:30 CET (09:30 UTC)
+    - cron: '30 9 * * *'
+    # Esegui alle 23:30 CET (21:30 UTC)
+    - cron: '30 21 * * *'
   workflow_dispatch:
     # Permette l'esecuzione manuale
 

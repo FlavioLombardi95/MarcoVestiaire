@@ -80,8 +80,10 @@ Modifica il file `.github/workflows/daily_update.yml`:
 
 ```yaml
 schedule:
-  # Esegui alle 10:00 AM (CET)
-  - cron: '0 9 * * *'
+  # Esegui alle 11:30 CET (09:30 UTC)
+  - cron: '30 9 * * *'
+  # Esegui alle 23:30 CET (21:30 UTC)
+  - cron: '30 21 * * *'
 ```
 
 ### Configurazione Logging
@@ -135,7 +137,7 @@ Il sistema creerà automaticamente:
 - Scarica i logs se necessario
 
 ### Google Sheet
-- Il foglio viene aggiornato automaticamente ogni giorno
+- Il foglio viene aggiornato automaticamente due volte al giorno
 - Controlla la colonna "Data" per verificare gli aggiornamenti
 
 ## 🔄 Manutenzione

@@ -1,6 +1,6 @@
 # Vestiaire Monitor - Automazione Google Sheets
 
-Sistema di automazione per monitorare i profili Vendors su Vestiaire Collective e aggiornare automaticamente un Google Sheet ogni giorno.
+Sistema di automazione per monitorare i profili Vendors su Vestiaire Collective e aggiornare automaticamente un Google Sheet due volte al giorno.
 
 ## 🎯 Obiettivo
 
@@ -29,7 +29,7 @@ Monitorare automaticamente 11 profili Vendors su Vestiaire Collective:
 - ✅ **Web Scraping automatico** dei profili Vestiaire
 - ✅ **Calcolo differenze** giornaliere
 - ✅ **Aggiornamento Google Sheets** automatico
-- ✅ **Esecuzione giornaliera** alle 9:00 AM (GitHub Actions)
+- ✅ **Esecuzione biquotidiana** alle 11:30 e 23:30 (GitHub Actions)
 - ✅ **Logging** degli errori
 - ✅ **Notifiche** in caso di problemi
 
@@ -69,7 +69,7 @@ vestiaire-monitor/
 
 ## ⏰ Scheduling
 
-- **Frequenza**: Ogni giorno alle 9:00 AM (CET)
+- **Frequenza**: Due volte al giorno alle 11:30 e 23:30 (CET)
 - **Piattaforma**: GitHub Actions
 - **Costo**: Gratuito
 
