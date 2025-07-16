@@ -429,6 +429,22 @@ class GoogleSheetsUpdater:
         # Mappa profilo->riga
         profilo_to_row = {row[0]: i for i, row in enumerate(values[1:], start=2) if row and row[0]}
         
+        # Rimuovi profili che non sono più nella configurazione
+        profili_configurati = {profilo['name'] for profilo in scraped_data}
+        righe_da_rimuovere = []
+        for i, row in enumerate(values[1:], start=1):
+            if row and row[0] and row[0] not in profili_configurati and row[0] != "Totali":
+                righe_da_rimuovere.append(i)
+        
+        # Rimuovi le righe in ordine inverso per non alterare gli indici
+        for i in sorted(righe_da_rimuovere, reverse=True):
+            if i < len(values):
+                del values[i]
+                logger.info(f"Rimosso profilo obsoleto: {values[i][0] if i < len(values) else 'Unknown'}")
+        
+        # Ricostruisci la mappa profilo->riga dopo la rimozione
+        profilo_to_row = {row[0]: i for i, row in enumerate(values[1:], start=2) if row and row[0]}
+        
         # Calcola colonne da aggiornare
         base_col = 2 + (day-1)*4
         articoli_col = base_col
