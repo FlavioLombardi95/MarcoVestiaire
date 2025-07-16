@@ -24,21 +24,18 @@ logger = logging.getLogger(__name__)
 class VestiaireScraper:
     """Classe per lo scraping dei profili Vestiaire Collective"""
     
-    def __init__(self):
+    def __init__(self, profiles=None):
         self.driver = None
-        self.profiles = {
-            "Rediscover": "2039815",
-            "Volodymyr": "5924329", 
-            "stephanie": "9168643",
-            "Mark": "13442939",
-            "A Retro Tale": "5537180",
-            "Lapsa": "11345596",
-            "Bag": "3770739",
-            "Clara": "27862876",
-            "Baggy Vintage": "18106856",
-            "Vintageandkickz": "19199976",
-            "Vintage & Modern": "29517320"
-        }
+        # Usa la configurazione esterna se fornita, altrimenti usa quella di default
+        if profiles:
+            self.profiles = profiles
+        else:
+            # Importa la configurazione da config.py
+            import sys
+            import os
+            sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            from config import VESTIAIRE_PROFILES
+            self.profiles = VESTIAIRE_PROFILES
         # Statistiche performance
         self.performance_stats = {
             "driver_setup_time": 0,

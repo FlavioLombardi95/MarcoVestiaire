@@ -191,9 +191,9 @@ def main():
             logger.error(f"❌ Errore nella connessione Google Sheets: {e}")
             return False
         
-        # Inizializza scraper
+        # Inizializza scraper con la configurazione corretta
         logger.info("🔍 Inizializzazione scraper...")
-        scraper = VestiaireScraper()
+        scraper = VestiaireScraper(profiles=PROFILES)
         
         # Scraping dei dati
         logger.info("📡 Avvio scraping dei profili...")
