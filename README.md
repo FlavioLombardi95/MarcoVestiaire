@@ -4,7 +4,7 @@ Sistema di automazione per monitorare i profili Vendors su Vestiaire Collective 
 
 ## 🎯 Obiettivo
 
-Monitorare automaticamente 11 profili Vendors su Vestiaire Collective:
+Monitorare automaticamente 13 profili Vendors su Vestiaire Collective:
 - Numero di articoli in vendita
 - Numero totale di vendite
 - Calcolo delle differenze giornaliere
@@ -18,11 +18,13 @@ Monitorare automaticamente 11 profili Vendors su Vestiaire Collective:
 4. **Mark** (13442939)
 5. **A Retro Tale** (5537180)
 6. **Lapsa** (11345596)
-7. **Bag** (3770739)
+7. **Hugo** (21940019)
 8. **Clara** (27862876)
 9. **Baggy Vintage** (18106856)
 10. **Vintageandkickz** (19199976)
 11. **Vintage & Modern** (29517320)
+12. **Plamexs** (8642167)
+13. **The Brand Collector** (4085582)
 
 ## 🚀 Funzionalità
 

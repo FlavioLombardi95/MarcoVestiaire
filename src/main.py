@@ -397,11 +397,13 @@ def aggiorna_sheet_con_dati_statici():
         {"name": "Mark", "url": "https://it.vestiairecollective.com/profile/13442939/", "articles": 5027, "sales": 1891, "timestamp": ""},
         {"name": "A Retro Tale", "url": "https://it.vestiairecollective.com/profile/5537180/", "articles": 5064, "sales": 5433, "timestamp": ""},
         {"name": "Lapsa", "url": "https://it.vestiairecollective.com/profile/11345596/", "articles": 795, "sales": 4349, "timestamp": ""},
-        {"name": "Bag", "url": "https://it.vestiairecollective.com/profile/3770739/", "articles": 14, "sales": 230, "timestamp": ""},
         {"name": "Clara", "url": "https://it.vestiairecollective.com/profile/27862876/", "articles": 1610, "sales": 149, "timestamp": ""},
         {"name": "Baggy Vintage", "url": "https://it.vestiairecollective.com/profile/18106856/", "articles": 369, "sales": 675, "timestamp": ""},
         {"name": "Vintageandkickz", "url": "https://it.vestiairecollective.com/profile/19199976/", "articles": 2389, "sales": 4178, "timestamp": ""},
         {"name": "Vintage & Modern", "url": "https://it.vestiairecollective.com/profile/29517320/", "articles": 24, "sales": 27, "timestamp": ""},
+        {"name": "Hugo", "url": "https://it.vestiairecollective.com/profile/21940019/", "articles": 0, "sales": 0, "timestamp": ""},
+        {"name": "Plamexs", "url": "https://it.vestiairecollective.com/profile/8642167/", "articles": 0, "sales": 0, "timestamp": ""},
+        {"name": "The Brand Collector", "url": "https://it.vestiairecollective.com/profile/4085582/", "articles": 0, "sales": 0, "timestamp": ""},
     ]
     credentials = load_credentials()
     import json as _json
@@ -424,11 +426,13 @@ def aggiorna_tab_mensile_statico():
         {"name": "Mark", "url": "https://it.vestiairecollective.com/profile/13442939/", "articles": 5027, "sales": 1891, "timestamp": ""},
         {"name": "A Retro Tale", "url": "https://it.vestiairecollective.com/profile/5537180/", "articles": 5064, "sales": 5433, "timestamp": ""},
         {"name": "Lapsa", "url": "https://it.vestiairecollective.com/profile/11345596/", "articles": 795, "sales": 4349, "timestamp": ""},
-        {"name": "Bag", "url": "https://it.vestiairecollective.com/profile/3770739/", "articles": 14, "sales": 230, "timestamp": ""},
         {"name": "Clara", "url": "https://it.vestiairecollective.com/profile/27862876/", "articles": 1610, "sales": 149, "timestamp": ""},
         {"name": "Baggy Vintage", "url": "https://it.vestiairecollective.com/profile/18106856/", "articles": 369, "sales": 675, "timestamp": ""},
         {"name": "Vintageandkickz", "url": "https://it.vestiairecollective.com/profile/19199976/", "articles": 2389, "sales": 4178, "timestamp": ""},
         {"name": "Vintage & Modern", "url": "https://it.vestiairecollective.com/profile/29517320/", "articles": 24, "sales": 27, "timestamp": ""},
+        {"name": "Hugo", "url": "https://it.vestiairecollective.com/profile/21940019/", "articles": 0, "sales": 0, "timestamp": ""},
+        {"name": "Plamexs", "url": "https://it.vestiairecollective.com/profile/8642167/", "articles": 0, "sales": 0, "timestamp": ""},
+        {"name": "The Brand Collector", "url": "https://it.vestiairecollective.com/profile/4085582/", "articles": 0, "sales": 0, "timestamp": ""},
     ]
     credentials = load_credentials()
     import json as _json
