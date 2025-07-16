@@ -1,6 +1,7 @@
 """
 Configurazione Vestiaire Monitor
 File di configurazione per le impostazioni del monitoraggio
+Ultimo aggiornamento: 2024-12-19 15:30 CET
 """
 
 import os
