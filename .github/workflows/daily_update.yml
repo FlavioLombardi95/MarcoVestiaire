@@ -16,6 +16,8 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Forza download completo del repository
       
     - name: Set up Python
       uses: actions/setup-python@v4
@@ -36,6 +38,9 @@ jobs:
       env:
         GOOGLE_SHEETS_CREDENTIALS: ${{ secrets.GOOGLE_SHEETS_CREDENTIALS }}
       run: |
+        echo "=== VERIFICA CONFIGURAZIONE ==="
+        python -c "from config import VESTIAIRE_PROFILES; print(f'Profili configurati: {len(VESTIAIRE_PROFILES)}'); print('Profili:'); [print(f'  {name}') for name in VESTIAIRE_PROFILES.keys()]; print(f'Bag presente: {\"Bag\" in VESTIAIRE_PROFILES}'); print(f'Hugo presente: {\"Hugo\" in VESTIAIRE_PROFILES}')"
+        echo "=== AVVIO MONITOR ==="
         cd src
         python main.py
         
