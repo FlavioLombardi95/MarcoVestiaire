@@ -114,7 +114,7 @@ class VestiaireScraper:
     
     def scrape_profile(self, profile_name: str, profile_id: str) -> Dict:
         """Scrapa un singolo profilo Vestiaire"""
-        url = f"https://it.vestiairecollective.com/profile/{profile_id}/?sortBy=relevance&tab=items-for-sale"
+        url = f"https://it.vestiairecollective.com/profile/{profile_id}/"
         
         profile_start_time = time.time()
         articles = 0
