@@ -18,6 +18,7 @@ jobs:
       uses: actions/checkout@v4
       with:
         fetch-depth: 0  # Forza download completo del repository
+        token: ${{ secrets.GITHUB_TOKEN }}
       
     - name: Set up Python
       uses: actions/setup-python@v4
@@ -39,7 +40,7 @@ jobs:
         GOOGLE_SHEETS_CREDENTIALS: ${{ secrets.GOOGLE_SHEETS_CREDENTIALS }}
       run: |
         echo "=== VERIFICA CONFIGURAZIONE ==="
-        python -c "from config import VESTIAIRE_PROFILES; print(f'Profili configurati: {len(VESTIAIRE_PROFILES)}'); print('Profili:'); [print(f'  {name}') for name in VESTIAIRE_PROFILES.keys()]; print(f'Bag presente: {\"Bag\" in VESTIAIRE_PROFILES}'); print(f'Hugo presente: {\"Hugo\" in VESTIAIRE_PROFILES}')"
+        python -c "from config import VESTIAIRE_PROFILES; print(f'Profili configurati: {len(VESTIAIRE_PROFILES)}'); print('Profili:'); [print(f'  {name}') for name in VESTIAIRE_PROFILES.keys()]; print(f'Bag presente: {\"Bag\" in VESTIAIRE_PROFILES}'); print(f'Hugo presente: {\"Hugo\" in VESTIAIRE_PROFILES}'); print(f'URL esempio: https://it.vestiairecollective.com/profile/{VESTIAIRE_PROFILES[\"Hugo\"]}/')"
         echo "=== AVVIO MONITOR ==="
         cd src
         python main.py
