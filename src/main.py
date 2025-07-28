@@ -728,6 +728,71 @@ def test_credentials():
         traceback.print_exc()
         return False
 
+def test_overview_sheet():
+    """Test della creazione e aggiornamento della tab Overview"""
+    try:
+        logger.info("🔍 TEST TAB OVERVIEW")
+        logger.info("=" * 50)
+        
+        # Ottieni credenziali
+        credentials_json = os.environ.get('GOOGLE_SHEETS_CREDENTIALS')
+        if not credentials_json:
+            logger.error("❌ Credenziali non trovate nelle variabili d'ambiente")
+            return False
+        
+        # Inizializza updater
+        updater = GoogleSheetsUpdater(credentials_json)
+        
+        # Test creazione e aggiornamento Overview
+        success = updater.update_overview_sheet()
+        
+        if success:
+            logger.info("✅ Test tab Overview completato con successo!")
+        else:
+            logger.error("❌ Test tab Overview fallito!")
+            
+        return success
+        
+    except Exception as e:
+        logger.error(f"Errore nel test Overview: {e}")
+        traceback.print_exc()
+        return False
+
+def test_diff_vendite_column():
+    """Test dell'aggiunta della colonna diff vendite mensili"""
+    try:
+        logger.info("🔍 TEST COLONNA DIFF VENDITE MENSILI")
+        logger.info("=" * 50)
+        
+        # Ottieni credenziali
+        credentials_json = os.environ.get('GOOGLE_SHEETS_CREDENTIALS')
+        if not credentials_json:
+            logger.error("❌ Credenziali non trovate nelle variabili d'ambiente")
+            return False
+        
+        # Inizializza updater
+        updater = GoogleSheetsUpdater(credentials_json)
+        
+        # Test per la tab july (mese corrente)
+        import datetime
+        today = datetime.date.today()
+        month_name = today.strftime('%B').lower()
+        
+        # Test aggiornamento totali diff vendite
+        success = updater.update_monthly_diff_vendite_totals(month_name, today.year)
+        
+        if success:
+            logger.info(f"✅ Test colonna diff vendite per {month_name} completato con successo!")
+        else:
+            logger.error(f"❌ Test colonna diff vendite per {month_name} fallito!")
+            
+        return success
+        
+    except Exception as e:
+        logger.error(f"Errore nel test colonna diff vendite: {e}")
+        traceback.print_exc()
+        return False
+
 if __name__ == "__main__":
     # Controlla gli argomenti della riga di comando
     if len(sys.argv) > 1:
@@ -744,6 +809,10 @@ if __name__ == "__main__":
             aggiorna_tab_mensile_statico()
         elif command == "formatta-mensile":
             formatta_tab_mensile()
+        elif command == "test-overview":
+            test_overview_sheet()
+        elif command == "test-diff-vendite":
+            test_diff_vendite_column()
         elif command == "debug-scraping":
             debug_scraping_issue()
         elif command == "debug-totali":
@@ -757,6 +826,8 @@ if __name__ == "__main__":
             print("  python main.py aggiorna-statico - Aggiorna sheet solo con dati statici")
             print("  python main.py aggiorna-mensile-statico - Aggiorna tab mensile con dati statici")
             print("  python main.py formatta-mensile - Applica solo la formattazione alla tab mensile")
+            print("  python main.py test-overview - Testa la creazione e aggiornamento della tab Overview")
+            print("  python main.py test-diff-vendite - Testa la colonna diff vendite mensili")
             print("  python main.py debug-scraping - Debugga il problema dei dati identici")
             print("  python main.py debug-totali - Debugga i calcoli dei totali nelle Google Sheets")
             print("  python main.py help         - Mostra questo aiuto")

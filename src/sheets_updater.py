@@ -293,7 +293,7 @@ class GoogleSheetsUpdater:
             num_data_rows = len(values) - 1 if values and values[-1][0] == "Totali" else len(values)
             end_row = num_data_rows  # escludi la riga Totali
             logger.info(f"[FORMAT] Colori alternati fino a riga: {end_row}")
-            start_col = 2
+            start_col = 3  # +3 invece di +2 perché ora abbiamo Profilo, Diff Vendite, URL
             for d in range(1, days+1):
                 end_col = start_col + 3
                 requests.append({
@@ -310,7 +310,7 @@ class GoogleSheetsUpdater:
                 })
                 start_col = end_col+1
             # Colori alternati (bianco/blu chiaro ben visibile) SOLO sulle righe dati
-            start_col = 2
+            start_col = 3  # +3 invece di +2 perché ora abbiamo Profilo, Diff Vendite, URL
             for d in range(1, days+1):
                 end_col = start_col + 3
                 color = {"red": 0.89, "green": 0.94, "blue": 0.99} if d % 2 == 0 else {"red": 1, "green": 1, "blue": 1}
@@ -333,7 +333,7 @@ class GoogleSheetsUpdater:
                 })
                 start_col = end_col+1
             # Larghezza colonne
-            for c in range(2, 2+days*4):
+            for c in range(3, 3+days*4):  # +3 invece di +2 perché ora abbiamo Profilo, Diff Vendite, URL
                 requests.append({
                     "updateDimensionProperties": {
                         "range": {
@@ -386,12 +386,12 @@ class GoogleSheetsUpdater:
                 logger.info(f"Tab '{month_name}' creata")
                 # Prepara intestazioni
                 days = calendar.monthrange(year, list(calendar.month_name).index(month_name.capitalize()))[1]
-                # Riga 1: date (merge da formattazione)
-                header1 = ["Profilo", "URL"]
+                # Riga 1: date (merge da formattazione) - INCLUDE SECONDA COLONNA
+                header1 = ["Profilo", f"Diff Vendite {month_name.capitalize()}", "URL"]
                 for d in range(1, days+1):
                     header1 += [f"{d} {month_name}", "", "", ""]
-                # Riga 2: etichette
-                header2 = ["", ""]
+                # Riga 2: etichette - INCLUDE SECONDA COLONNA
+                header2 = ["", "totale mese", ""]
                 for d in range(1, days+1):
                     header2 += ["articoli", "vendite", "diff stock", "diff vendite"]
                 # Scrivi intestazioni
@@ -451,8 +451,8 @@ class GoogleSheetsUpdater:
         # Ricostruisci la mappa profilo->riga dopo la rimozione
         profilo_to_row = {row[0]: i for i, row in enumerate(values[1:], start=2) if row and row[0]}
         
-        # Calcola colonne da aggiornare
-        base_col = 2 + (day-1)*4
+        # Calcola colonne da aggiornare (aggiustato per la nuova seconda colonna)
+        base_col = 3 + (day-1)*4  # +3 invece di +2 perché ora abbiamo Profilo, Diff Vendite, URL
         articoli_col = base_col
         vendite_col = base_col+1
         diff_stock_col = base_col+2
@@ -469,10 +469,10 @@ class GoogleSheetsUpdater:
             # Trova riga
             if name in profilo_to_row:
                 row_idx = profilo_to_row[name]
-                row = copy.deepcopy(values[row_idx-1]) if row_idx-1 < len(values) else [name, url]
+                row = copy.deepcopy(values[row_idx-1]) if row_idx-1 < len(values) else [name, "", url]
             else:
-                # Nuovo profilo
-                row = [name, url] + ["" for _ in range(len(header)-2)]
+                # Nuovo profilo (con seconda colonna per diff vendite mensile)
+                row = [name, "", url] + ["" for _ in range(len(header)-3)]
                 values.append(row)
                 row_idx = len(values)
                 # Aggiorna mapping
@@ -601,12 +601,294 @@ class GoogleSheetsUpdater:
             logger.error(f"Errore nella formattazione della riga Totali: {e}")
         
         logger.info(f"Tab {month_name} aggiornata con i dati del giorno {day} e riga Totali con formule")
+        
+        # Aggiorna i totali mensili delle diff vendite nella seconda colonna
+        self.update_monthly_diff_vendite_totals(month_name, year)
+        
         self.format_monthly_sheet(month_name, year)
+        
+        # Aggiorna la tab Overview dopo aver aggiornato la tab mensile
+        self.update_overview_sheet()
+        
         return True
 
     def format_only_monthly_sheet(self, month_name: str, year: int):
         """Applica solo la formattazione a una tab mensile già esistente, senza toccare i dati."""
         self.format_monthly_sheet(month_name, year)
+
+    def update_monthly_diff_vendite_totals(self, month_name: str, year: int):
+        """Aggiorna la seconda colonna con i totali mensili delle diff vendite."""
+        try:
+            # Leggi i dati attuali
+            result = self.service.spreadsheets().values().get(
+                spreadsheetId=self.spreadsheet_id,
+                range=f"{month_name}!A:ZZ"
+            ).execute()
+            values = result.get('values', [])
+            
+            if not values or len(values) < 2:
+                logger.error(f"Tab {month_name} non ha dati sufficienti")
+                return False
+            
+            # Trova tutte le colonne "diff vendite" del mese
+            days = calendar.monthrange(year, list(calendar.month_name).index(month_name.capitalize()))[1]
+            
+            # Per ogni riga profilo (escludi header e totali)
+            for row_idx in range(2, len(values)):
+                if values[row_idx] and values[row_idx][0] and values[row_idx][0] != "Totali":
+                    total_diff_vendite = 0
+                    
+                    # Calcola la somma delle diff vendite per questo profilo
+                    for day in range(1, days + 1):
+                        base_col = 3 + (day - 1) * 4  # +3 perché ora abbiamo Profilo, Diff Vendite, URL
+                        diff_vendite_col = base_col + 3  # La quarta colonna di ogni giorno
+                        
+                        if diff_vendite_col < len(values[row_idx]):
+                            try:
+                                cell_value = values[row_idx][diff_vendite_col]
+                                if cell_value and str(cell_value).strip():
+                                    # Rimuovi caratteri non numerici e converti
+                                    clean_val = str(cell_value).replace("'", "").replace(" ", "").strip()
+                                    if clean_val:
+                                        total_diff_vendite += int(clean_val)
+                            except (ValueError, TypeError):
+                                pass
+                    
+                    # Aggiorna la seconda colonna (indice 1)
+                    if len(values[row_idx]) > 1:
+                        values[row_idx][1] = total_diff_vendite
+            
+            # Scrivi i dati aggiornati
+            self.service.spreadsheets().values().update(
+                spreadsheetId=self.spreadsheet_id,
+                range=f"{month_name}!A1",
+                valueInputOption='USER_ENTERED',
+                body={'values': values}
+            ).execute()
+            
+            logger.info(f"Totali diff vendite mensili aggiornati per {month_name}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Errore nell'aggiornamento dei totali diff vendite mensili: {e}")
+            return False
+
+    def create_overview_sheet(self):
+        """Crea la tab Overview se non esiste."""
+        try:
+            # Ottieni lista delle tab
+            spreadsheet = self.service.spreadsheets().get(spreadsheetId=self.spreadsheet_id).execute()
+            sheet_names = [s['properties']['title'] for s in spreadsheet['sheets']]
+            
+            if "Overview" not in sheet_names:
+                # Crea la tab
+                requests = [{
+                    "addSheet": {
+                        "properties": {
+                            "title": "Overview"
+                        }
+                    }
+                }]
+                self.service.spreadsheets().batchUpdate(
+                    spreadsheetId=self.spreadsheet_id,
+                    body={"requests": requests}
+                ).execute()
+                logger.info("Tab 'Overview' creata")
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"Errore nella creazione della tab Overview: {e}")
+            return False
+
+    def update_overview_sheet(self):
+        """Aggiorna la tab Overview con i totali mensili delle diff vendite."""
+        try:
+            # Crea la tab se non esiste
+            self.create_overview_sheet()
+            
+            # Ottieni lista delle tab mensili esistenti
+            spreadsheet = self.service.spreadsheets().get(spreadsheetId=self.spreadsheet_id).execute()
+            sheet_names = [s['properties']['title'] for s in spreadsheet['sheets']]
+            
+            # Filtra solo le tab mensili (escludi Overview e altre tab)
+            month_names = []
+            for name in sheet_names:
+                if name.lower() in [calendar.month_name[i].lower() for i in range(1, 13)]:
+                    month_names.append(name.lower())
+            
+            # Ordina le tab mensili cronologicamente
+            month_names.sort(key=lambda x: list(calendar.month_name).index(x.capitalize()))
+            
+            logger.info(f"Tab mensili trovate: {month_names}")
+            
+            # Prepara i dati per Overview
+            overview_data = []
+            
+            # Header: Profilo + mesi
+            header = ["Profilo"] + [month.capitalize() for month in month_names]
+            overview_data.append(header)
+            
+            # Ottieni la lista dei profili dalla configurazione
+            from config import VESTIAIRE_PROFILES
+            profiles = list(VESTIAIRE_PROFILES.keys())
+            
+            # Per ogni profilo, calcola i totali mensili
+            for profile in profiles:
+                row = [profile]
+                
+                for month in month_names:
+                    try:
+                        # Leggi i dati della tab mensile
+                        result = self.service.spreadsheets().values().get(
+                            spreadsheetId=self.spreadsheet_id,
+                            range=f"{month}!A:ZZ"
+                        ).execute()
+                        values = result.get('values', [])
+                        
+                        if not values or len(values) < 2:
+                            row.append(0)
+                            continue
+                        
+                        # Trova la riga del profilo
+                        profile_row = None
+                        for row_idx, data_row in enumerate(values):
+                            if data_row and data_row[0] == profile:
+                                profile_row = data_row
+                                break
+                        
+                        if not profile_row or len(profile_row) < 2:
+                            row.append(0)
+                            continue
+                        
+                        # Prendi il valore dalla seconda colonna (diff vendite mensile)
+                        # Se la colonna non esiste, calcola la somma delle diff vendite
+                        if len(profile_row) > 1 and profile_row[1] != "":
+                            try:
+                                total = int(str(profile_row[1]).replace("'", "").replace(" ", "").strip())
+                                row.append(total)
+                            except (ValueError, TypeError):
+                                row.append(0)
+                        else:
+                            # Calcola la somma delle diff vendite se la colonna non esiste
+                            days = calendar.monthrange(2024, list(calendar.month_name).index(month.capitalize()))[1]
+                            total_diff_vendite = 0
+                            
+                            for day in range(1, days + 1):
+                                base_col = 3 + (day - 1) * 4  # +3 perché ora abbiamo Profilo, Diff Vendite, URL
+                                diff_vendite_col = base_col + 3  # La quarta colonna di ogni giorno
+                                if diff_vendite_col < len(profile_row):
+                                    try:
+                                        cell_value = profile_row[diff_vendite_col]
+                                        if cell_value and str(cell_value).strip():
+                                            clean_val = str(cell_value).replace("'", "").replace(" ", "").strip()
+                                            if clean_val:
+                                                total_diff_vendite += int(clean_val)
+                                    except (ValueError, TypeError):
+                                        pass
+                            
+                            row.append(total_diff_vendite)
+                            
+                    except Exception as e:
+                        logger.error(f"Errore nel calcolo per {profile} in {month}: {e}")
+                        row.append(0)
+                
+                overview_data.append(row)
+            
+            # Scrivi i dati nella tab Overview
+            self.service.spreadsheets().values().update(
+                spreadsheetId=self.spreadsheet_id,
+                range="Overview!A1",
+                valueInputOption='USER_ENTERED',
+                body={'values': overview_data}
+            ).execute()
+            
+            # Applica formattazione
+            self.format_overview_sheet(len(month_names))
+            
+            logger.info("Tab Overview aggiornata con successo")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Errore nell'aggiornamento della tab Overview: {e}")
+            return False
+
+    def format_overview_sheet(self, num_months: int):
+        """Applica formattazione alla tab Overview."""
+        try:
+            sheet_id = self._get_sheet_id("Overview")
+            
+            requests = []
+            
+            # Formattazione header
+            requests.append({
+                "repeatCell": {
+                    "range": {
+                        "sheetId": sheet_id,
+                        "startRowIndex": 0,
+                        "endRowIndex": 1,
+                        "startColumnIndex": 0,
+                        "endColumnIndex": num_months + 1
+                    },
+                    "cell": {
+                        "userEnteredFormat": {
+                            "backgroundColor": {"red": 0.2, "green": 0.6, "blue": 0.8},
+                            "textFormat": {
+                                "bold": True,
+                                "foregroundColor": {"red": 1, "green": 1, "blue": 1}
+                            }
+                        }
+                    },
+                    "fields": "userEnteredFormat(backgroundColor,textFormat)"
+                }
+            })
+            
+            # Colori alternati per le righe dati
+            for row_idx in range(1, 14):  # 13 profili
+                color = {"red": 0.89, "green": 0.94, "blue": 0.99} if row_idx % 2 == 0 else {"red": 1, "green": 1, "blue": 1}
+                requests.append({
+                    "repeatCell": {
+                        "range": {
+                            "sheetId": sheet_id,
+                            "startRowIndex": row_idx,
+                            "endRowIndex": row_idx + 1,
+                            "startColumnIndex": 0,
+                            "endColumnIndex": num_months + 1
+                        },
+                        "cell": {
+                            "userEnteredFormat": {
+                                "backgroundColor": color
+                            }
+                        },
+                        "fields": "userEnteredFormat.backgroundColor"
+                    }
+                })
+            
+            # Larghezza colonne
+            for col_idx in range(num_months + 1):
+                requests.append({
+                    "updateDimensionProperties": {
+                        "range": {
+                            "sheetId": sheet_id,
+                            "dimension": "COLUMNS",
+                            "startIndex": col_idx,
+                            "endIndex": col_idx + 1
+                        },
+                        "properties": {"pixelSize": 120},
+                        "fields": "pixelSize"
+                    }
+                })
+            
+            # Applica formattazione
+            self.service.spreadsheets().batchUpdate(
+                spreadsheetId=self.spreadsheet_id,
+                body={"requests": requests}
+            ).execute()
+            
+            logger.info("Formattazione tab Overview completata")
+            
+        except Exception as e:
+            logger.error(f"Errore nella formattazione della tab Overview: {e}")
 
 def main():
     """Funzione principale per testare l'updater"""
