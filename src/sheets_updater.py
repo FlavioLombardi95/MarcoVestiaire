@@ -631,6 +631,10 @@ class GoogleSheetsUpdater:
         # Aggiorna i totali mensili delle diff vendite nella seconda colonna
         self.update_monthly_diff_vendite_totals(month_name, year)
         
+        # Correggi automaticamente i dati di Volodymyr se necessario
+        if month_name == "july":
+            self.fix_volodymyr_data(month_name)
+        
         self.format_monthly_sheet(month_name, year)
         
         # Aggiorna la tab Overview dopo aver aggiornato la tab mensile
