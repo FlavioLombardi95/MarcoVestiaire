@@ -556,8 +556,6 @@ class GoogleSheetsUpdater:
         
         # Aggiungi formula per la colonna B (Diff Vendite mensile)
         col_b_letter = column_index_to_letter(1)  # Colonna B (indice 1)
-        logger.info(f"Colonna B lettera: {col_b_letter} (dovrebbe essere B)")
-        logger.info(f"Indici test: 0={column_index_to_letter(0)}, 1={column_index_to_letter(1)}, 2={column_index_to_letter(2)}, 3={column_index_to_letter(3)}")
         diff_vendite_formula = f"=SOMMA({col_b_letter}{start_row}:{col_b_letter}{end_row})"
         totali_row.append(diff_vendite_formula)
         
