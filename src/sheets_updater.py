@@ -539,11 +539,7 @@ class GoogleSheetsUpdater:
                 col_idx //= 26
             return result
         
-        # DEBUG: Test della funzione column_index_to_letter
-        logger.info(f"DEBUG: column_index_to_letter(0) = {column_index_to_letter(0)}")  # Dovrebbe essere A
-        logger.info(f"DEBUG: column_index_to_letter(1) = {column_index_to_letter(1)}")  # Dovrebbe essere B
-        logger.info(f"DEBUG: column_index_to_letter(2) = {column_index_to_letter(2)}")  # Dovrebbe essere C
-        logger.info(f"DEBUG: column_index_to_letter(3) = {column_index_to_letter(3)}")  # Dovrebbe essere D
+
         
         # Calcola e aggiungi la riga dei totali con formule
         num_cols = len(header)
@@ -558,29 +554,23 @@ class GoogleSheetsUpdater:
         start_row = 3  # Prima riga dati
         end_row = len(values)  # Ultima riga dati (prima di aggiungere i totali)
         
-        totali_row = ["Totali", ""]
+        totali_row = ["Totali"]
         
         # Aggiungi formula per la colonna B (Diff Vendite mensile)
         col_b_letter = column_index_to_letter(1)  # Colonna B (indice 1)
         diff_vendite_formula = f"=SOMMA({col_b_letter}{start_row}:{col_b_letter}{end_row})"
         totali_row.append(diff_vendite_formula)
-        logger.info(f"DEBUG: Aggiunta formula per colonna B: {diff_vendite_formula}")
         
         # Aggiungi formula per la colonna C (URL) - vuota
         totali_row.append("")
-        logger.info(f"DEBUG: Aggiunta cella vuota per colonna C")
         
         # Aggiungi formule di somma per tutte le colonne dalla D in poi
         for c in range(3, num_cols):  # Inizia da indice 3 (colonna D)
             col_letter = column_index_to_letter(c)
             formula = f"=SOMMA({col_letter}{start_row}:{col_letter}{end_row})"
             totali_row.append(formula)
-            logger.info(f"DEBUG: Aggiunta formula per colonna {col_letter} (indice {c}): {formula}")
         
         values.append(totali_row)
-        
-        logger.info(f"DEBUG: Riga totali completa: {totali_row}")
-        logger.info(f"DEBUG: Lunghezza riga totali: {len(totali_row)}")
         
         # Scrivi tutte le righe aggiornate
         self.service.spreadsheets().values().update(
