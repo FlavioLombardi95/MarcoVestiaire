@@ -955,13 +955,13 @@ class GoogleSheetsUpdater:
                 return False
             
             # Calcola le colonne corrette per il 13 e 14 luglio
-            # Struttura: Profilo, Diff Vendite, URL, dati giornalieri (4 colonne per giorno)
-            # 13 luglio: giorno 1 -> colonne 3,4,5,6 (articoli, vendite, diff stock, diff vendite)
-            # 14 luglio: giorno 2 -> colonne 7,8,9,10 (articoli, vendite, diff stock, diff vendite)
-            col_13_articoli = 3    # Colonna articoli del 13 luglio
-            col_13_vendite = 4     # Colonna vendite del 13 luglio
-            col_14_diff_stock = 9  # Colonna diff stock del 14 luglio
-            col_14_diff_vendite = 10  # Colonna diff vendite del 14 luglio
+            # Struttura: Profilo, Diff Vendite, URL, [colonne nascoste], dati giornalieri
+            # 13 luglio: AZ=51, BA=52, BB=53, BC=54 (articoli, vendite, diff stock, diff vendite)
+            # 14 luglio: BD=55, BE=56, BF=57, BG=58 (articoli, vendite, diff stock, diff vendite)
+            col_13_articoli = 51   # Colonna AZ - articoli del 13 luglio
+            col_13_vendite = 52    # Colonna BA - vendite del 13 luglio
+            col_14_diff_stock = 57 # Colonna BF - diff stock del 14 luglio
+            col_14_diff_vendite = 58  # Colonna BG - diff vendite del 14 luglio
             
             logger.info(f"Colonne calcolate: 13 articoli={col_13_articoli}, 13 vendite={col_13_vendite}, 14 diff stock={col_14_diff_stock}, 14 diff vendite={col_14_diff_vendite}")
             
