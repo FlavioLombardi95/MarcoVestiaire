@@ -293,7 +293,7 @@ class GoogleSheetsUpdater:
             num_data_rows = len(values) - 1 if values and values[-1][0] == "Totali" else len(values)
             end_row = num_data_rows  # escludi la riga Totali
             logger.info(f"[FORMAT] Colori alternati fino a riga: {end_row}")
-            start_col = 3  # +3 invece di +2 perché ora abbiamo Profilo, Diff Vendite, URL
+            start_col = 3  # +3 perché ora abbiamo Profilo, Diff Vendite, URL
             for d in range(1, days+1):
                 end_col = start_col + 3
                 requests.append({
@@ -310,7 +310,7 @@ class GoogleSheetsUpdater:
                 })
                 start_col = end_col+1
             # Colori alternati (bianco/blu chiaro ben visibile) SOLO sulle righe dati
-            start_col = 3  # +3 invece di +2 perché ora abbiamo Profilo, Diff Vendite, URL
+            start_col = 3  # +3 perché ora abbiamo Profilo, Diff Vendite, URL
             for d in range(1, days+1):
                 end_col = start_col + 3
                 color = {"red": 0.89, "green": 0.94, "blue": 0.99} if d % 2 == 0 else {"red": 1, "green": 1, "blue": 1}
@@ -333,7 +333,7 @@ class GoogleSheetsUpdater:
                 })
                 start_col = end_col+1
             # Larghezza colonne
-            for c in range(3, 3+days*4):  # +3 invece di +2 perché ora abbiamo Profilo, Diff Vendite, URL
+            for c in range(3, 3+days*4):  # +3 perché ora abbiamo Profilo, Diff Vendite, URL
                 requests.append({
                     "updateDimensionProperties": {
                         "range": {
@@ -386,12 +386,12 @@ class GoogleSheetsUpdater:
                 logger.info(f"Tab '{month_name}' creata")
                 # Prepara intestazioni
                 days = calendar.monthrange(year, list(calendar.month_name).index(month_name.capitalize()))[1]
-                # Riga 1: date (merge da formattazione) - INCLUDE SECONDA COLONNA
-                header1 = ["Profilo", f"Diff Vendite {month_name.capitalize()}", "URL"]
+                # Riga 1: date (merge da formattazione)
+                header1 = ["Profilo", "URL"]
                 for d in range(1, days+1):
                     header1 += [f"{d} {month_name}", "", "", ""]
-                # Riga 2: etichette - INCLUDE SECONDA COLONNA
-                header2 = ["", "totale mese", ""]
+                # Riga 2: etichette
+                header2 = ["", ""]
                 for d in range(1, days+1):
                     header2 += ["articoli", "vendite", "diff stock", "diff vendite"]
                 # Scrivi intestazioni
@@ -451,8 +451,8 @@ class GoogleSheetsUpdater:
         # Ricostruisci la mappa profilo->riga dopo la rimozione
         profilo_to_row = {row[0]: i for i, row in enumerate(values[1:], start=2) if row and row[0]}
         
-        # Calcola colonne da aggiornare (aggiustato per la nuova seconda colonna)
-        base_col = 3 + (day-1)*4  # +3 invece di +2 perché ora abbiamo Profilo, Diff Vendite, URL
+        # Calcola colonne da aggiornare (struttura: Profilo, Diff Vendite, URL, dati giornalieri)
+        base_col = 3 + (day-1)*4  # +3 perché ora abbiamo Profilo, Diff Vendite, URL
         articoli_col = base_col
         vendite_col = base_col+1
         diff_stock_col = base_col+2
@@ -472,6 +472,7 @@ class GoogleSheetsUpdater:
                 row = copy.deepcopy(values[row_idx-1]) if row_idx-1 < len(values) else [name, "", url]
             else:
                 # Nuovo profilo (con seconda colonna per diff vendite mensile)
+                # Struttura: Profilo, Diff Vendite, URL, ...dati giornalieri
                 row = [name, "", url] + ["" for _ in range(len(header)-3)]
                 values.append(row)
                 row_idx = len(values)
@@ -630,8 +631,15 @@ class GoogleSheetsUpdater:
                 logger.error(f"Tab {month_name} non ha dati sufficienti")
                 return False
             
-            # Trova tutte le colonne "diff vendite" del mese
-            days = calendar.monthrange(year, list(calendar.month_name).index(month_name.capitalize()))[1]
+            # Trova tutte le colonne "diff vendite" dalla riga 2 (header delle colonne)
+            diff_vendite_columns = []
+            if len(values) > 1:
+                header_row = values[1]  # Riga 2 contiene le intestazioni delle colonne
+                for col_idx, header in enumerate(header_row):
+                    if header and "diff vendite" in str(header).lower():
+                        diff_vendite_columns.append(col_idx)
+            
+            logger.info(f"Trovate {len(diff_vendite_columns)} colonne diff vendite: {diff_vendite_columns}")
             
             # Per ogni riga profilo (escludi header e totali)
             for row_idx in range(2, len(values)):
@@ -639,13 +647,10 @@ class GoogleSheetsUpdater:
                     total_diff_vendite = 0
                     
                     # Calcola la somma delle diff vendite per questo profilo
-                    for day in range(1, days + 1):
-                        base_col = 3 + (day - 1) * 4  # +3 perché ora abbiamo Profilo, Diff Vendite, URL
-                        diff_vendite_col = base_col + 3  # La quarta colonna di ogni giorno
-                        
-                        if diff_vendite_col < len(values[row_idx]):
+                    for col_idx in diff_vendite_columns:
+                        if col_idx < len(values[row_idx]):
                             try:
-                                cell_value = values[row_idx][diff_vendite_col]
+                                cell_value = values[row_idx][col_idx]
                                 if cell_value and str(cell_value).strip():
                                     # Rimuovi caratteri non numerici e converti
                                     clean_val = str(cell_value).replace("'", "").replace(" ", "").strip()
@@ -654,9 +659,10 @@ class GoogleSheetsUpdater:
                             except (ValueError, TypeError):
                                 pass
                     
-                    # Aggiorna la seconda colonna (indice 1)
+                    # Aggiorna la seconda colonna (indice 1) - Diff Vendite mensile
                     if len(values[row_idx]) > 1:
                         values[row_idx][1] = total_diff_vendite
+                        logger.info(f"Profilo {values[row_idx][0]}: totale diff vendite = {total_diff_vendite}")
             
             # Scrivi i dati aggiornati
             self.service.spreadsheets().values().update(
@@ -771,15 +777,19 @@ class GoogleSheetsUpdater:
                                 row.append(0)
                         else:
                             # Calcola la somma delle diff vendite se la colonna non esiste
-                            days = calendar.monthrange(2024, list(calendar.month_name).index(month.capitalize()))[1]
-                            total_diff_vendite = 0
+                            # Trova tutte le colonne "diff vendite" dalla riga 2
+                            diff_vendite_columns = []
+                            if len(values) > 1:
+                                header_row = values[1]  # Riga 2 contiene le intestazioni delle colonne
+                                for col_idx, header in enumerate(header_row):
+                                    if header and "diff vendite" in str(header).lower():
+                                        diff_vendite_columns.append(col_idx)
                             
-                            for day in range(1, days + 1):
-                                base_col = 3 + (day - 1) * 4  # +3 perché ora abbiamo Profilo, Diff Vendite, URL
-                                diff_vendite_col = base_col + 3  # La quarta colonna di ogni giorno
-                                if diff_vendite_col < len(profile_row):
+                            total_diff_vendite = 0
+                            for col_idx in diff_vendite_columns:
+                                if col_idx < len(profile_row):
                                     try:
-                                        cell_value = profile_row[diff_vendite_col]
+                                        cell_value = profile_row[col_idx]
                                         if cell_value and str(cell_value).strip():
                                             clean_val = str(cell_value).replace("'", "").replace(" ", "").strip()
                                             if clean_val:
