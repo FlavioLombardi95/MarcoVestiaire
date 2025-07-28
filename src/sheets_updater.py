@@ -628,12 +628,12 @@ class GoogleSheetsUpdater:
         
         logger.info(f"Tab {month_name} aggiornata con i dati del giorno {day} e riga Totali con formule")
         
-        # Aggiorna i totali mensili delle diff vendite nella seconda colonna
-        self.update_monthly_diff_vendite_totals(month_name, year)
-        
-        # Correggi automaticamente i dati di Volodymyr se necessario
+        # Correggi automaticamente i dati di Volodymyr se necessario (PRIMA dei totali)
         if month_name == "july":
             self.fix_volodymyr_data(month_name)
+        
+        # Aggiorna i totali mensili delle diff vendite nella seconda colonna
+        self.update_monthly_diff_vendite_totals(month_name, year)
         
         self.format_monthly_sheet(month_name, year)
         
@@ -954,47 +954,28 @@ class GoogleSheetsUpdater:
                 logger.error("Riga di Volodymyr non trovata")
                 return False
             
-            # Trova le colonne per il 13 e 14 luglio
-            # 13 luglio: articoli e vendite
-            col_13_articoli = None  # Colonna articoli del 13 luglio
-            col_13_vendite = None   # Colonna vendite del 13 luglio
-            col_14_diff_stock = None  # Colonna diff stock del 14 luglio
-            col_14_diff_vendite = None  # Colonna diff vendite del 14 luglio
+            # Calcola le colonne corrette per il 13 e 14 luglio
+            # Struttura: Profilo, Diff Vendite, URL, dati giornalieri (4 colonne per giorno)
+            # 13 luglio: giorno 1 -> colonne 3,4,5,6 (articoli, vendite, diff stock, diff vendite)
+            # 14 luglio: giorno 2 -> colonne 7,8,9,10 (articoli, vendite, diff stock, diff vendite)
+            col_13_articoli = 3    # Colonna articoli del 13 luglio
+            col_13_vendite = 4     # Colonna vendite del 13 luglio
+            col_14_diff_stock = 9  # Colonna diff stock del 14 luglio
+            col_14_diff_vendite = 10  # Colonna diff vendite del 14 luglio
             
-            # Cerca le colonne basandosi sulle intestazioni
-            if len(values) > 1:
-                header_row = values[1]  # Riga 2 contiene le intestazioni
-                for col_idx, header in enumerate(header_row):
-                    if header == "articoli":
-                        # Verifica se è la colonna del 13 luglio (prima colonna articoli)
-                        if col_13_articoli is None:
-                            col_13_articoli = col_idx
-                    elif header == "vendite":
-                        # Verifica se è la colonna del 13 luglio (prima colonna vendite)
-                        if col_13_vendite is None:
-                            col_13_vendite = col_idx
-                    elif header == "diff stock":
-                        # Verifica se è la colonna del 14 luglio (seconda colonna diff stock)
-                        if col_14_diff_stock is None:
-                            col_14_diff_stock = col_idx
-                    elif header == "diff vendit":
-                        # Verifica se è la colonna del 14 luglio (seconda colonna diff vendite)
-                        if col_14_diff_vendite is None:
-                            col_14_diff_vendite = col_idx
-            
-            logger.info(f"Colonne trovate: 13 articoli={col_13_articoli}, 13 vendite={col_13_vendite}, 14 diff stock={col_14_diff_stock}, 14 diff vendite={col_14_diff_vendite}")
+            logger.info(f"Colonne calcolate: 13 articoli={col_13_articoli}, 13 vendite={col_13_vendite}, 14 diff stock={col_14_diff_stock}, 14 diff vendite={col_14_diff_vendite}")
             
             # Correggi i dati
-            if col_13_articoli is not None and col_13_articoli < len(values[volodymyr_row_idx]):
+            if col_13_articoli < len(values[volodymyr_row_idx]):
                 values[volodymyr_row_idx][col_13_articoli] = 2332  # Dato corretto per il 13 luglio
             
-            if col_13_vendite is not None and col_13_vendite < len(values[volodymyr_row_idx]):
+            if col_13_vendite < len(values[volodymyr_row_idx]):
                 values[volodymyr_row_idx][col_13_vendite] = 5582  # Dato corretto per il 13 luglio
             
-            if col_14_diff_stock is not None and col_14_diff_stock < len(values[volodymyr_row_idx]):
+            if col_14_diff_stock < len(values[volodymyr_row_idx]):
                 values[volodymyr_row_idx][col_14_diff_stock] = 0  # Diff stock = 0 per il 14 luglio
             
-            if col_14_diff_vendite is not None and col_14_diff_vendite < len(values[volodymyr_row_idx]):
+            if col_14_diff_vendite < len(values[volodymyr_row_idx]):
                 values[volodymyr_row_idx][col_14_diff_vendite] = 0  # Diff vendite = 0 per il 14 luglio
             
             # Scrivi i dati corretti
