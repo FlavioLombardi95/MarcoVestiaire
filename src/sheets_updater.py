@@ -451,8 +451,10 @@ class GoogleSheetsUpdater:
         # Ricostruisci la mappa profilo->riga dopo la rimozione
         profilo_to_row = {row[0]: i for i, row in enumerate(values[1:], start=2) if row and row[0]}
         
-        # Calcola colonne da aggiornare (struttura: Profilo, Diff Vendite, URL, dati giornalieri)
-        base_col = 3 + (day-1)*4  # +3 perché ora abbiamo Profilo, Diff Vendite, URL
+        # Calcola colonne da aggiornare (struttura: Profilo, Diff Vendite, URL, [colonne nascoste], dati giornalieri)
+        # Le colonne nascoste vanno da D (indice 3) a AY (indice 50), quindi 48 colonne
+        # I dati del 13 luglio iniziano da AZ (indice 51)
+        base_col = 51 + (day-13)*4  # 13 luglio = giorno 1, 14 luglio = giorno 2, ecc.
         articoli_col = base_col
         vendite_col = base_col+1
         diff_stock_col = base_col+2
@@ -486,42 +488,33 @@ class GoogleSheetsUpdater:
             # Calcola differenze
             prev_articoli = None
             prev_vendite = None
-            if articoli_col-4 < len(row):
-                try:
-                    if row[articoli_col-4]:
-                        clean_val = str(row[articoli_col-4]).replace("'", "").replace(" ", "").strip()
-                        prev_articoli = int(clean_val) if clean_val else None
-                    else:
-                        prev_articoli = None
-                except (ValueError, TypeError):
-                    prev_articoli = None
+            if day > 13:  # Solo se non è il primo giorno (13 luglio)
+                prev_articoli_col = 51 + (day-14)*4  # Giorno precedente
+                prev_vendite_col = 52 + (day-14)*4   # Giorno precedente
                 
-                try:
-                    if row[vendite_col-4]:
-                        clean_val = str(row[vendite_col-4]).replace("'", "").replace(" ", "").strip()
-                        prev_vendite = int(clean_val) if clean_val else None
-                    else:
+                if prev_articoli_col < len(row):
+                    try:
+                        if row[prev_articoli_col]:
+                            clean_val = str(row[prev_articoli_col]).replace("'", "").replace(" ", "").strip()
+                            prev_articoli = int(clean_val) if clean_val else None
+                        else:
+                            prev_articoli = None
+                    except (ValueError, TypeError):
+                        prev_articoli = None
+                
+                if prev_vendite_col < len(row):
+                    try:
+                        if row[prev_vendite_col]:
+                            clean_val = str(row[prev_vendite_col]).replace("'", "").replace(" ", "").strip()
+                            prev_vendite = int(clean_val) if clean_val else None
+                        else:
+                            prev_vendite = None
+                    except (ValueError, TypeError):
                         prev_vendite = None
-                except (ValueError, TypeError):
-                    prev_vendite = None
             
-            # Correzione speciale per Volodymyr il 13 luglio
-            if name == "Volodymyr" and day == 13:
-                # Imposta i dati corretti per il 13 luglio
-                articoli = 2332  # Dato corretto per il 13 luglio
-                vendite = 5582   # Dato corretto per il 13 luglio
-                diff_stock = ""  # Nessuna differenza per il primo giorno
-                diff_vendite = ""  # Nessuna differenza per il primo giorno
-            elif name == "Volodymyr" and day == 14:
-                # Per il 14 luglio, le differenze devono essere 0
-                prev_articoli = 2332  # Dato del 13 luglio
-                prev_vendite = 5582   # Dato del 13 luglio
-                diff_stock = articoli - prev_articoli
-                diff_vendite = vendite - prev_vendite
-            else:
-                # Calcolo normale per tutti gli altri casi
-                diff_stock = articoli - prev_articoli if prev_articoli is not None else ""
-                diff_vendite = vendite - prev_vendite if prev_vendite is not None else ""
+            # Calcolo normale per tutti i casi
+            diff_stock = articoli - prev_articoli if prev_articoli is not None else ""
+            diff_vendite = vendite - prev_vendite if prev_vendite is not None else ""
             
             # Allunga la riga se serve
             while len(row) < diff_vendite_col+1:
@@ -628,9 +621,7 @@ class GoogleSheetsUpdater:
         
         logger.info(f"Tab {month_name} aggiornata con i dati del giorno {day} e riga Totali con formule")
         
-        # Correggi automaticamente i dati di Volodymyr se necessario (PRIMA dei totali)
-        if month_name == "july":
-            self.fix_volodymyr_data(month_name)
+
         
         # Aggiorna i totali mensili delle diff vendite nella seconda colonna
         self.update_monthly_diff_vendite_totals(month_name, year)
@@ -929,69 +920,7 @@ class GoogleSheetsUpdater:
         except Exception as e:
             logger.error(f"Errore nella formattazione della tab Overview: {e}")
 
-    def fix_volodymyr_data(self, month_name: str):
-        """Corregge i dati di Volodymyr per il 13 e 14 luglio."""
-        try:
-            # Leggi i dati attuali
-            result = self.service.spreadsheets().values().get(
-                spreadsheetId=self.spreadsheet_id,
-                range=f"{month_name}!A:ZZ"
-            ).execute()
-            values = result.get('values', [])
-            
-            if not values or len(values) < 2:
-                logger.error(f"Tab {month_name} non ha dati sufficienti")
-                return False
-            
-            # Trova la riga di Volodymyr
-            volodymyr_row_idx = None
-            for row_idx, row in enumerate(values):
-                if row and row[0] == "Volodymyr":
-                    volodymyr_row_idx = row_idx
-                    break
-            
-            if volodymyr_row_idx is None:
-                logger.error("Riga di Volodymyr non trovata")
-                return False
-            
-            # Calcola le colonne corrette per il 13 e 14 luglio
-            # Struttura: Profilo, Diff Vendite, URL, [colonne nascoste], dati giornalieri
-            # 13 luglio: AZ=51, BA=52, BB=53, BC=54 (articoli, vendite, diff stock, diff vendite)
-            # 14 luglio: BD=55, BE=56, BF=57, BG=58 (articoli, vendite, diff stock, diff vendite)
-            col_13_articoli = 51   # Colonna AZ - articoli del 13 luglio
-            col_13_vendite = 52    # Colonna BA - vendite del 13 luglio
-            col_14_diff_stock = 57 # Colonna BF - diff stock del 14 luglio
-            col_14_diff_vendite = 58  # Colonna BG - diff vendite del 14 luglio
-            
-            logger.info(f"Colonne calcolate: 13 articoli={col_13_articoli}, 13 vendite={col_13_vendite}, 14 diff stock={col_14_diff_stock}, 14 diff vendite={col_14_diff_vendite}")
-            
-            # Correggi i dati
-            if col_13_articoli < len(values[volodymyr_row_idx]):
-                values[volodymyr_row_idx][col_13_articoli] = 2332  # Dato corretto per il 13 luglio
-            
-            if col_13_vendite < len(values[volodymyr_row_idx]):
-                values[volodymyr_row_idx][col_13_vendite] = 5582  # Dato corretto per il 13 luglio
-            
-            if col_14_diff_stock < len(values[volodymyr_row_idx]):
-                values[volodymyr_row_idx][col_14_diff_stock] = 0  # Diff stock = 0 per il 14 luglio
-            
-            if col_14_diff_vendite < len(values[volodymyr_row_idx]):
-                values[volodymyr_row_idx][col_14_diff_vendite] = 0  # Diff vendite = 0 per il 14 luglio
-            
-            # Scrivi i dati corretti
-            self.service.spreadsheets().values().update(
-                spreadsheetId=self.spreadsheet_id,
-                range=f"{month_name}!A1",
-                valueInputOption='USER_ENTERED',
-                body={'values': values}
-            ).execute()
-            
-            logger.info("Dati di Volodymyr corretti per il 13 e 14 luglio")
-            return True
-            
-        except Exception as e:
-            logger.error(f"Errore nella correzione dei dati di Volodymyr: {e}")
-            return False
+
 
 def main():
     """Funzione principale per testare l'updater"""

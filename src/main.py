@@ -793,35 +793,7 @@ def test_diff_vendite_column():
         traceback.print_exc()
         return False
 
-def fix_volodymyr_data():
-    """Corregge i dati di Volodymyr per il 13 e 14 luglio."""
-    try:
-        logger.info("🔧 CORREZIONE DATI VOLODYMYR")
-        logger.info("=" * 50)
-        
-        # Ottieni credenziali
-        credentials_json = os.environ.get('GOOGLE_SHEETS_CREDENTIALS')
-        if not credentials_json:
-            logger.error("❌ Credenziali non trovate nelle variabili d'ambiente")
-            return False
-        
-        # Inizializza updater
-        updater = GoogleSheetsUpdater(credentials_json)
-        
-        # Correggi i dati per la tab july
-        success = updater.fix_volodymyr_data("july")
-        
-        if success:
-            logger.info("✅ Dati di Volodymyr corretti con successo!")
-        else:
-            logger.error("❌ Errore nella correzione dei dati di Volodymyr!")
-            
-        return success
-        
-    except Exception as e:
-        logger.error(f"Errore nella correzione dati Volodymyr: {e}")
-        traceback.print_exc()
-        return False
+
 
 if __name__ == "__main__":
     # Controlla gli argomenti della riga di comando
@@ -843,8 +815,7 @@ if __name__ == "__main__":
             test_overview_sheet()
         elif command == "test-diff-vendite":
             test_diff_vendite_column()
-        elif command == "fix-volodymyr":
-            fix_volodymyr_data()
+
         elif command == "debug-scraping":
             debug_scraping_issue()
         elif command == "debug-totali":
@@ -860,7 +831,7 @@ if __name__ == "__main__":
             print("  python main.py formatta-mensile - Applica solo la formattazione alla tab mensile")
             print("  python main.py test-overview - Testa la creazione e aggiornamento della tab Overview")
             print("  python main.py test-diff-vendite - Testa la colonna diff vendite mensili")
-            print("  python main.py fix-volodymyr - Corregge i dati di Volodymyr per il 13-14 luglio")
+
             print("  python main.py debug-scraping - Debugga il problema dei dati identici")
             print("  python main.py debug-totali - Debugga i calcoli dei totali nelle Google Sheets")
             print("  python main.py help         - Mostra questo aiuto")
