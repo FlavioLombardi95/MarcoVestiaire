@@ -479,6 +479,10 @@ class GoogleSheetsUpdater:
                 # Aggiorna mapping
                 profilo_to_row[name] = row_idx
             
+            # Aggiorna sempre l'URL nella colonna C (indice 2)
+            if len(row) > 2:
+                row[2] = url
+            
             # Calcola differenze
             prev_articoli = None
             prev_vendite = None
@@ -541,6 +545,12 @@ class GoogleSheetsUpdater:
         end_row = len(values)  # Ultima riga dati (prima di aggiungere i totali)
         
         totali_row = ["Totali", ""]
+        
+        # Aggiungi formula per la colonna B (Diff Vendite mensile)
+        col_b_letter = column_index_to_letter(1)  # Colonna B
+        diff_vendite_formula = f"=SOMMA({col_b_letter}{start_row}:{col_b_letter}{end_row})"
+        totali_row.append(diff_vendite_formula)
+        
         for c in range(2, num_cols):
             # Verifica se questa colonna è per "articoli" o "vendite" (non differenze)
             col_header = header[c] if c < len(header) else ""
