@@ -559,27 +559,14 @@ class GoogleSheetsUpdater:
         diff_vendite_formula = f"=SOMMA({col_b_letter}{start_row}:{col_b_letter}{end_row})"
         totali_row.append(diff_vendite_formula)
         
-        for c in range(2, num_cols):
-            # Verifica se questa colonna è per "articoli" o "vendite" (non differenze)
-            col_header = header[c] if c < len(header) else ""
-            is_articles_or_sales = ("articoli" in col_header.lower() or 
-                                   "vendite" in col_header.lower() or 
-                                   # Colonne con pattern giorno: colonna base (articoli) e base+1 (vendite)
-                                   (c-2) % 4 in [0, 1])  # 0=articoli, 1=vendite in ogni gruppo di 4
-            
-            # Verifica se è una colonna differenze
-            is_diff_column = ("diff" in col_header.lower() or 
-                             # Colonne con pattern giorno: colonna base+2 (diff stock) e base+3 (diff vendite)
-                             (c-2) % 4 in [2, 3])  # 2=diff stock, 3=diff vendite in ogni gruppo di 4
-            
-            if is_articles_or_sales or is_diff_column:
-                # Crea formula di somma per tutte le colonne (articoli, vendite, diff stock, diff vendite)
-                col_letter = column_index_to_letter(c)
-                formula = f"=SOMMA({col_letter}{start_row}:{col_letter}{end_row})"
-                totali_row.append(formula)
-            else:
-                # Per altre colonne, metti stringa vuota
-                totali_row.append("")
+        # Aggiungi formula per la colonna C (URL) - vuota
+        totali_row.append("")
+        
+        # Aggiungi formule di somma per tutte le colonne dalla D in poi
+        for c in range(3, num_cols):  # Inizia da indice 3 (colonna D)
+            col_letter = column_index_to_letter(c)
+            formula = f"=SOMMA({col_letter}{start_row}:{col_letter}{end_row})"
+            totali_row.append(formula)
         
         values.append(totali_row)
         
