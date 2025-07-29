@@ -6,6 +6,8 @@ Modulo per estrarre prezzi degli articoli venduti dai profili Vestiaire Collecti
 import time
 import logging
 import re
+import concurrent.futures
+import threading
 from typing import Dict, List, Tuple
 from datetime import datetime
 from selenium import webdriver
@@ -121,6 +123,105 @@ class RevenueScraper:
         
         return 0.0
     
+    def _handle_cookie_banner(self):
+        """Gestisce il banner dei cookie"""
+        try:
+            # Selettori per il banner cookie
+            cookie_selectors = [
+                "//button[contains(text(), 'Accetta')]",
+                "//button[contains(text(), 'Accept')]",
+                "//button[contains(text(), 'OK')]",
+                "//button[contains(text(), 'Consenti')]",
+                "//button[contains(text(), 'Allow')]",
+                "//div[contains(@class, 'cookie')]//button",
+                "//div[contains(@class, 'banner')]//button",
+                "//button[contains(@class, 'accept')]",
+                "//button[contains(@class, 'cookie')]"
+            ]
+            
+            for selector in cookie_selectors:
+                try:
+                    elements = self.driver.find_elements(By.XPATH, selector)
+                    for element in elements:
+                        if element.is_displayed() and element.is_enabled():
+                            element.click()
+                            logger.debug("  🍪 Banner cookie gestito")
+                            time.sleep(1)
+                            return
+                except Exception:
+                    continue
+                    
+        except Exception as e:
+            logger.debug(f"  ⚠️ Errore gestione cookie: {e}")
+    
+    def _activate_sold_toggle(self, profile_name: str) -> bool:
+        """Attiva il toggle per gli articoli venduti"""
+        try:
+            # Prima verifica se il toggle è già attivo
+            toggle_active = False
+            active_selectors = [
+                "//div[contains(@class, 'toggle') and contains(@class, 'active')]",
+                "//button[contains(@class, 'toggle') and contains(@class, 'active')]",
+                "//div[contains(@class, 'switch') and contains(@class, 'active')]",
+                "//input[@type='checkbox' and @checked]",
+                "//div[contains(@class, 'filter') and contains(@class, 'active')]"
+            ]
+            
+            for selector in active_selectors:
+                try:
+                    elements = self.driver.find_elements(By.XPATH, selector)
+                    if elements:
+                        toggle_active = True
+                        logger.debug(f"  ✅ Toggle articoli venduti già attivo per {profile_name}")
+                        return True
+                except Exception:
+                    continue
+            
+            # Se non è attivo, cerca di attivarlo
+            logger.debug(f"  🔄 Attivando toggle articoli venduti per {profile_name}")
+            
+            toggle_selectors = [
+                "//div[contains(text(), 'Articoli venduti')]",
+                "//button[contains(text(), 'Articoli venduti')]",
+                "//span[contains(text(), 'Articoli venduti')]",
+                "//div[contains(text(), 'venduti')]",
+                "//button[contains(text(), 'venduti')]",
+                "//span[contains(text(), 'venduti')]",
+                "//div[contains(@class, 'toggle')]",
+                "//button[contains(@class, 'toggle')]",
+                "//div[contains(@class, 'switch')]",
+                "//input[@type='checkbox']"
+            ]
+            
+            for selector in toggle_selectors:
+                try:
+                    elements = self.driver.find_elements(By.XPATH, selector)
+                    for element in elements:
+                        try:
+                            if element.is_displayed() and element.is_enabled():
+                                # Scroll per assicurarsi che sia visibile
+                                self.driver.execute_script("arguments[0].scrollIntoView(true);", element)
+                                time.sleep(1)
+                                
+                                # Clicca sul toggle
+                                element.click()
+                                time.sleep(2)  # Attendi caricamento
+                                
+                                logger.debug(f"  ✅ Toggle cliccato con selettore: {selector}")
+                                return True
+                        except Exception as e:
+                            logger.debug(f"  ⚠️ Errore clic toggle: {e}")
+                            continue
+                except Exception:
+                    continue
+            
+            logger.warning(f"  ⚠️ Toggle articoli venduti non trovato per {profile_name}")
+            return False
+            
+        except Exception as e:
+            logger.error(f"  ❌ Errore attivazione toggle: {e}")
+            return False
+    
     def scrape_profile_revenue(self, profile_name: str, profile_id: str) -> Dict:
         """Scrapa i prezzi degli articoli venduti per un singolo profilo"""
         # Prima accediamo alla pagina normale del profilo
@@ -141,6 +242,9 @@ class RevenueScraper:
             time.sleep(5)
             page_load_time = time.time() - page_load_start
             
+            # Gestione cookie banner
+            self._handle_cookie_banner()
+            
             # Verifica se la pagina è caricata correttamente
             page_title = self.driver.title
             if "403" in page_title or "404" in page_title or "error" in page_title.lower():
@@ -150,41 +254,43 @@ class RevenueScraper:
             # Misurazione tempo di parsing
             parse_start = time.time()
             
-            # Ora cerchiamo il tab "sold" o "venduti" e clicchiamo su di esso
-            logger.debug(f"  📍 Cercando tab sold/venduti per {profile_name}")
+            # Attiva il toggle per gli articoli venduti
+            toggle_activated = self._activate_sold_toggle(profile_name)
             
-            # Cerca il tab "sold" o "venduti" e cliccalo
+            # Fallback: cerca anche il tab "sold" o "venduti"
             sold_tab_found = False
-            sold_tab_selectors = [
-                "//a[contains(text(), 'sold') or contains(text(), 'venduti')]",
-                "//button[contains(text(), 'sold') or contains(text(), 'venduti')]",
-                "//div[contains(text(), 'sold') or contains(text(), 'venduti')]",
-                "//span[contains(text(), 'sold') or contains(text(), 'venduti')]",
-                "//a[contains(@href, 'sold') or contains(@href, 'venduti')]",
-                "//a[contains(@class, 'sold') or contains(@class, 'venduti')]"
-            ]
-            
-            for selector in sold_tab_selectors:
-                try:
-                    elements = self.driver.find_elements(By.XPATH, selector)
-                    for element in elements:
-                        try:
-                            # Verifica che sia cliccabile e visibile
-                            if element.is_displayed() and element.is_enabled():
-                                element.click()
-                                time.sleep(3)  # Attendi caricamento
-                                sold_tab_found = True
-                                logger.debug(f"  ✅ Tab sold trovato e cliccato con selettore: {selector}")
-                                break
-                        except Exception as e:
-                            continue
-                    if sold_tab_found:
-                        break
-                except Exception:
-                    continue
-            
-            if not sold_tab_found:
-                logger.warning(f"  ⚠️ Tab sold non trovato per {profile_name}, continuo con la pagina corrente")
+            if not toggle_activated:
+                logger.debug(f"  📍 Cercando tab sold/venduti come fallback per {profile_name}")
+                
+                sold_tab_selectors = [
+                    "//a[contains(text(), 'sold') or contains(text(), 'venduti')]",
+                    "//button[contains(text(), 'sold') or contains(text(), 'venduti')]",
+                    "//div[contains(text(), 'sold') or contains(text(), 'venduti')]",
+                    "//span[contains(text(), 'sold') or contains(text(), 'venduti')]",
+                    "//a[contains(@href, 'sold') or contains(@href, 'venduti')]",
+                    "//a[contains(@class, 'sold') or contains(@class, 'venduti')]"
+                ]
+                
+                for selector in sold_tab_selectors:
+                    try:
+                        elements = self.driver.find_elements(By.XPATH, selector)
+                        for element in elements:
+                            try:
+                                if element.is_displayed() and element.is_enabled():
+                                    element.click()
+                                    time.sleep(3)  # Attendi caricamento
+                                    sold_tab_found = True
+                                    logger.debug(f"  ✅ Tab sold trovato e cliccato con selettore: {selector}")
+                                    break
+                            except Exception as e:
+                                continue
+                        if sold_tab_found:
+                            break
+                    except Exception:
+                        continue
+                
+                if not sold_tab_found:
+                    logger.warning(f"  ⚠️ Tab sold non trovato per {profile_name}, continuo con la pagina corrente")
             
             # Cerca tutti gli elementi che potrebbero contenere prezzi nella sezione sold
             price_elements = []
@@ -399,46 +505,206 @@ class RevenueScraper:
             }
     
     def scrape_all_profiles_revenue(self) -> List[Dict]:
-        """Scrapa i ricavi di tutti i profili configurati"""
+        """Scrapa i ricavi per tutti i profili configurati"""
+        logger.info("🚀 Avvio scraping ricavi per tutti i profili...")
+        
+        start_time = time.time()
+        results = []
+        
+        try:
+            # Usa processing parallelo per ottimizzare le performance
+            results = self._scrape_profiles_parallel()
+            
+        except Exception as e:
+            logger.error(f"❌ Errore critico nello scraping parallelo: {e}")
+            # Fallback allo scraping sequenziale
+            logger.info("🔄 Fallback allo scraping sequenziale...")
+            results = self._scrape_profiles_sequential()
+        
+        # Calcola statistiche performance
+        total_time = time.time() - start_time
+        self.performance_stats["total_scraping_time"] = total_time
+        
+        if results:
+            profile_times = [r.get("performance", {}).get("total_time", 0) for r in results if r.get("success")]
+            if profile_times:
+                self.performance_stats["average_profile_time"] = sum(profile_times) / len(profile_times)
+                
+                # Trova profilo più veloce e più lento
+                fastest_idx = profile_times.index(min(profile_times))
+                slowest_idx = profile_times.index(max(profile_times))
+                
+                self.performance_stats["fastest_profile"] = {
+                    "name": results[fastest_idx]["name"],
+                    "time": profile_times[fastest_idx]
+                }
+                self.performance_stats["slowest_profile"] = {
+                    "name": results[slowest_idx]["name"],
+                    "time": profile_times[slowest_idx]
+                }
+        
+        self._log_performance_summary()
+        return results
+    
+    def _scrape_profiles_parallel(self, max_workers: int = None) -> List[Dict]:
+        """Scrapa i profili in parallelo usando ThreadPoolExecutor"""
+        if max_workers is None:
+            # Carica configurazione
+            try:
+                from config import OPTIMIZATION_CONFIG
+                max_workers = OPTIMIZATION_CONFIG.get("max_parallel_workers", 3)
+            except ImportError:
+                max_workers = 3
+        
+        logger.info(f"⚡ Avvio scraping parallelo con {max_workers} workers...")
+        
+        results = []
+        
+        # Crea un lock per thread safety
+        lock = threading.Lock()
+        
+        def scrape_single_profile(profile_data):
+            """Funzione per scraping singolo profilo"""
+            profile_name, profile_id = profile_data
+            
+            # Crea un nuovo driver per ogni thread
+            thread_driver = None
+            try:
+                thread_driver = self._create_thread_driver()
+                
+                # Crea una nuova istanza dello scraper per questo thread
+                thread_scraper = RevenueScraper(profiles={profile_name: profile_id}, 
+                                              existing_sales_data=self.existing_sales_data)
+                thread_scraper.driver = thread_driver
+                
+                result = thread_scraper.scrape_profile_revenue(profile_name, profile_id)
+                
+                # Thread-safe logging
+                with lock:
+                    logger.info(f"✅ Completato {profile_name} (thread)")
+                
+                return result
+                
+            except Exception as e:
+                logger.error(f"❌ Errore thread {profile_name}: {e}")
+                return {
+                    "name": profile_name,
+                    "profile_id": profile_id,
+                    "success": False,
+                    "error": str(e),
+                    "sold_items_count": 0,
+                    "total_revenue": 0.0,
+                    "sold_items_prices": [],
+                    "performance": {"page_load_time": 0, "parse_time": 0, "total_time": 0},
+                    "data_quality": {"items_found": False, "real_sold_count_found": False, "page_title": "", "price_elements_found": 0}
+                }
+            finally:
+                if thread_driver:
+                    try:
+                        thread_driver.quit()
+                    except:
+                        pass
+        
+        # Esegui scraping parallelo
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+            # Sottometti tutti i lavori
+            future_to_profile = {
+                executor.submit(scrape_single_profile, (name, id)): (name, id) 
+                for name, id in self.profiles.items()
+            }
+            
+            # Raccogli i risultati
+            for future in concurrent.futures.as_completed(future_to_profile):
+                profile_name, profile_id = future_to_profile[future]
+                try:
+                    result = future.result()
+                    results.append(result)
+                except Exception as e:
+                    logger.error(f"❌ Errore futuro per {profile_name}: {e}")
+                    results.append({
+                        "name": profile_name,
+                        "profile_id": profile_id,
+                        "success": False,
+                        "error": str(e),
+                        "sold_items_count": 0,
+                        "total_revenue": 0.0,
+                        "sold_items_prices": [],
+                        "performance": {"page_load_time": 0, "parse_time": 0, "total_time": 0},
+                        "data_quality": {"items_found": False, "real_sold_count_found": False, "page_title": "", "price_elements_found": 0}
+                    })
+        
+        return results
+    
+    def _scrape_profiles_sequential(self) -> List[Dict]:
+        """Scrapa i profili in modo sequenziale (fallback)"""
+        logger.info("🔄 Avvio scraping sequenziale...")
+        
         if not self.driver:
             self.setup_driver()
         
         results = []
-        scraping_start_time = time.time()
         
         try:
-            total_profiles = len(self.profiles)
-            logger.info(f"🚀 Avvio scraping ricavi di {total_profiles} profili...")
-            
-            for i, (profile_name, profile_id) in enumerate(self.profiles.items(), 1):
-                logger.info(f"📊 Progresso ricavi: {i}/{total_profiles}")
-                
-                result = self.scrape_profile_revenue(profile_name, profile_id)
-                results.append(result)
-                
-                # Pausa tra le richieste per evitare rate limiting
-                if i < total_profiles:
-                    logger.info("⏳ Pausa 3 secondi...")
-                    time.sleep(3)
-                
-        except Exception as e:
-            logger.error(f"Errore generale nello scraping ricavi: {e}")
+            for profile_name, profile_id in self.profiles.items():
+                try:
+                    result = self.scrape_profile_revenue(profile_name, profile_id)
+                    results.append(result)
+                    
+                    # Pausa tra i profili per evitare rate limiting
+                    if len(results) < len(self.profiles):
+                        time.sleep(3)
+                        
+                except Exception as e:
+                    logger.error(f"❌ Errore scraping profilo {profile_name}: {e}")
+                    results.append({
+                        "name": profile_name,
+                        "profile_id": profile_id,
+                        "success": False,
+                        "error": str(e),
+                        "sold_items_count": 0,
+                        "total_revenue": 0.0,
+                        "sold_items_prices": [],
+                        "performance": {"page_load_time": 0, "parse_time": 0, "total_time": 0},
+                        "data_quality": {"items_found": False, "real_sold_count_found": False, "page_title": "", "price_elements_found": 0}
+                    })
+        
         finally:
             if self.driver:
                 self.driver.quit()
-                logger.info("🔄 Driver Chrome chiuso")
-        
-        # Calcola statistiche finali
-        total_scraping_time = time.time() - scraping_start_time
-        self.performance_stats["total_scraping_time"] = total_scraping_time
-        
-        valid_times = [stats["total_time"] for stats in self.performance_stats["profile_times"].values()]
-        if valid_times:
-            self.performance_stats["average_profile_time"] = sum(valid_times) / len(valid_times)
-        
-        self._log_performance_summary()
+                self.driver = None
         
         return results
+    
+    def _create_thread_driver(self):
+        """Crea un nuovo driver Chrome per un thread"""
+        try:
+            chrome_options = Options()
+            chrome_options.add_argument("--headless")
+            chrome_options.add_argument("--no-sandbox")
+            chrome_options.add_argument("--disable-dev-shm-usage")
+            chrome_options.add_argument("--disable-gpu")
+            chrome_options.add_argument("--window-size=1920,1080")
+            chrome_options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
+            
+            # Gestione specifica per macOS
+            import platform
+            if platform.system() == "Darwin":
+                chrome_options.binary_location = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+                chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+                chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+                chrome_options.add_experimental_option('useAutomationExtension', False)
+            
+            # Ottieni il percorso del ChromeDriver
+            driver_path = ChromeDriverManager().install()
+            if driver_path.endswith('THIRD_PARTY_NOTICES.chromedriver'):
+                driver_path = driver_path.replace('THIRD_PARTY_NOTICES.chromedriver', 'chromedriver')
+            
+            service = Service(driver_path)
+            return webdriver.Chrome(service=service, options=chrome_options)
+            
+        except Exception as e:
+            logger.error(f"Errore creazione thread driver: {e}")
+            raise
     
     def _log_performance_summary(self):
         """Mostra un riassunto delle performance"""

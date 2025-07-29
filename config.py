@@ -84,11 +84,13 @@ TEST_CONFIG = {
 
 # Configurazione avanzata per ottimizzazioni
 OPTIMIZATION_CONFIG = {
-    "parallel_scraping": False,     # Scraping parallelo (sperimentale)
+    "parallel_scraping": True,      # Scraping parallelo (abilitato)
     "max_parallel_workers": 3,      # Numero massimo di worker paralleli
     "cache_driver": True,           # Cache del driver Chrome tra esecuzioni
     "smart_wait": True,             # Attesa intelligente basata sul caricamento
     "adaptive_delays": True,        # Adatta i tempi di attesa in base alle performance
+    "cookie_handling": True,        # Gestione automatica banner cookie
+    "toggle_handling": True,        # Gestione automatica toggle venduti
 }
 
 def get_config_summary() -> Dict:

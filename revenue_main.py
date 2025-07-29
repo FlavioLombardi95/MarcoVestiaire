@@ -218,6 +218,14 @@ def main():
         
         # Inizializza revenue scraper con i dati esistenti
         logger.info("🔍 Inizializzazione revenue scraper...")
+        
+        # Carica configurazione per processing parallelo
+        from config import OPTIMIZATION_CONFIG
+        max_workers = OPTIMIZATION_CONFIG.get("max_parallel_workers", 3)
+        parallel_enabled = OPTIMIZATION_CONFIG.get("parallel_scraping", True)
+        
+        logger.info(f"⚡ Configurazione parallelo: {max_workers} workers, abilitato: {parallel_enabled}")
+        
         scraper = RevenueScraper(profiles=PROFILES, existing_sales_data=existing_sales_data)
         
         # Scraping dei dati ricavi
