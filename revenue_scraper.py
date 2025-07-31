@@ -1,6 +1,5 @@
 """
-Revenue Scraper - Scraper parallelo per analisi ricavi
-Modulo per estrarre prezzi degli articoli venduti dai profili Vestiaire Collective
+Revenue Scraper - Scraper essenziale per ricavi
 """
 
 import time
@@ -8,760 +7,1200 @@ import logging
 import re
 import concurrent.futures
 import threading
-from typing import Dict, List, Tuple
-from datetime import datetime
+from typing import Dict, List
 from selenium import webdriver
 from selenium.webdriver.common.by import By
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.chrome.options import Options
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.chrome.service import Service
+from config import VESTIAIRE_PROFILES
 
-# Configurazione logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 class RevenueScraper:
-    """Classe per lo scraping dei prezzi degli articoli venduti"""
+    """Scraper essenziale per ricavi"""
     
     def __init__(self, profiles=None, existing_sales_data=None):
         self.driver = None
-        # Usa la configurazione esterna se fornita, altrimenti usa quella di default
-        if profiles:
-            self.profiles = profiles
-        else:
-            # Importa la configurazione da config.py
-            import sys
-            import os
-            sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-            from config import VESTIAIRE_PROFILES
-            self.profiles = VESTIAIRE_PROFILES
-        
-        # Dati vendite esistenti dal sistema principale
+        self.profiles = profiles or {}
         self.existing_sales_data = existing_sales_data or {}
-        
-        # Statistiche performance
-        self.performance_stats = {
-            "driver_setup_time": 0,
-            "total_scraping_time": 0,
-            "profile_times": {},
-            "average_profile_time": 0,
-            "fastest_profile": {"name": "", "time": float('inf')},
-            "slowest_profile": {"name": "", "time": 0}
-        }
     
     def setup_driver(self):
-        """Configura il driver Chrome per lo scraping"""
-        start_time = time.time()
-        try:
-            logger.info("⏱️ Configurazione driver Chrome per revenue scraping...")
-            chrome_options = Options()
-            chrome_options.add_argument("--headless")
-            chrome_options.add_argument("--no-sandbox")
-            chrome_options.add_argument("--disable-dev-shm-usage")
-            chrome_options.add_argument("--disable-gpu")
-            chrome_options.add_argument("--window-size=1920,1080")
-            chrome_options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
-            
-            # Gestione specifica per macOS
-            import platform
-            if platform.system() == "Darwin":
-                chrome_options.binary_location = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-                chrome_options.add_argument("--disable-blink-features=AutomationControlled")
-                chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-                chrome_options.add_experimental_option('useAutomationExtension', False)
-            
-            # Ottieni il percorso del ChromeDriver
-            driver_path = ChromeDriverManager().install()
-            if driver_path.endswith('THIRD_PARTY_NOTICES.chromedriver'):
-                driver_path = driver_path.replace('THIRD_PARTY_NOTICES.chromedriver', 'chromedriver')
-            
-            # Fix permessi per GitHub Actions (Linux)
-            if platform.system() == "Linux":
-                import stat
-                import os
-                try:
-                    os.chmod(driver_path, stat.S_IRWXU | stat.S_IRWXG | stat.S_IROTH | stat.S_IXOTH)
-                    logger.info(f"🔧 Permessi chromedriver impostati: {driver_path}")
-                except Exception as e:
-                    logger.warning(f"⚠️ Impossibile impostare permessi chromedriver: {e}")
-            
-            service = Service(driver_path)
-            self.driver = webdriver.Chrome(service=service, options=chrome_options)
-            
-            setup_time = time.time() - start_time
-            self.performance_stats["driver_setup_time"] = setup_time
-            logger.info(f"✅ Driver Chrome configurato in {setup_time:.2f} secondi")
-            
-        except Exception as e:
-            logger.error(f"Errore nella configurazione del driver: {e}")
-            raise
-    
-    def extract_price_from_text(self, text: str) -> float:
-        """Estrae il prezzo da una stringa di testo"""
-        if not text:
-            return 0.0
+        """Configura driver Chrome"""
+        chrome_options = Options()
+        chrome_options.add_argument("--headless")
+        chrome_options.add_argument("--no-sandbox")
+        chrome_options.add_argument("--disable-dev-shm-usage")
+        chrome_options.add_argument("--window-size=1920,1080")
         
-        # Cerca pattern di prezzo (es. €150, €1,500, 150€, etc.)
-        price_patterns = [
-            r'€\s*([\d,\.]+)',  # €150, €1,500
-            r'([\d,\.]+)\s*€',  # 150€, 1,500€
-            r'([\d,\.]+)\s*EUR', # 150 EUR
-            r'EUR\s*([\d,\.]+)', # EUR 150
-        ]
-        
-        for pattern in price_patterns:
-            match = re.search(pattern, text.replace(' ', ''))
-            if match:
-                try:
-                    # Rimuovi separatori e converti in float
-                    price_str = match.group(1).replace(',', '').replace('.', '')
-                    return float(price_str)
-                except ValueError:
-                    continue
-        
-        return 0.0
+        driver_path = ChromeDriverManager().install()
+        service = Service(driver_path)
+        self.driver = webdriver.Chrome(service=service, options=chrome_options)
     
     def _handle_cookie_banner(self):
-        """Gestisce il banner dei cookie"""
+        """Gestisce banner cookie"""
         try:
-            # Selettori per il banner cookie
-            cookie_selectors = [
+            selectors = [
                 "//button[contains(text(), 'Accetta')]",
                 "//button[contains(text(), 'Accept')]",
-                "//button[contains(text(), 'OK')]",
-                "//button[contains(text(), 'Consenti')]",
-                "//button[contains(text(), 'Allow')]",
-                "//div[contains(@class, 'cookie')]//button",
-                "//div[contains(@class, 'banner')]//button",
-                "//button[contains(@class, 'accept')]",
-                "//button[contains(@class, 'cookie')]"
-            ]
-            
-            for selector in cookie_selectors:
-                try:
-                    elements = self.driver.find_elements(By.XPATH, selector)
-                    for element in elements:
-                        if element.is_displayed() and element.is_enabled():
-                            element.click()
-                            logger.debug("  🍪 Banner cookie gestito")
-                            time.sleep(1)
-                            return
-                except Exception:
-                    continue
-                    
-        except Exception as e:
-            logger.debug(f"  ⚠️ Errore gestione cookie: {e}")
-    
-    def _activate_sold_toggle(self, profile_name: str) -> bool:
-        """Attiva il toggle per gli articoli venduti"""
-        try:
-            # Prima verifica se il toggle è già attivo
-            toggle_active = False
-            active_selectors = [
-                "//div[contains(@class, 'toggle') and contains(@class, 'active')]",
-                "//button[contains(@class, 'toggle') and contains(@class, 'active')]",
-                "//div[contains(@class, 'switch') and contains(@class, 'active')]",
-                "//input[@type='checkbox' and @checked]",
-                "//div[contains(@class, 'filter') and contains(@class, 'active')]"
-            ]
-            
-            for selector in active_selectors:
-                try:
-                    elements = self.driver.find_elements(By.XPATH, selector)
-                    if elements:
-                        toggle_active = True
-                        logger.debug(f"  ✅ Toggle articoli venduti già attivo per {profile_name}")
-                        return True
-                except Exception:
-                    continue
-            
-            # Se non è attivo, cerca di attivarlo
-            logger.debug(f"  🔄 Attivando toggle articoli venduti per {profile_name}")
-            
-            toggle_selectors = [
-                "//div[contains(text(), 'Articoli venduti')]",
-                "//button[contains(text(), 'Articoli venduti')]",
-                "//span[contains(text(), 'Articoli venduti')]",
-                "//div[contains(text(), 'venduti')]",
-                "//button[contains(text(), 'venduti')]",
-                "//span[contains(text(), 'venduti')]",
-                "//div[contains(@class, 'toggle')]",
-                "//button[contains(@class, 'toggle')]",
-                "//div[contains(@class, 'switch')]",
-                "//input[@type='checkbox']"
-            ]
-            
-            for selector in toggle_selectors:
-                try:
-                    elements = self.driver.find_elements(By.XPATH, selector)
-                    for element in elements:
-                        try:
-                            if element.is_displayed() and element.is_enabled():
-                                # Scroll per assicurarsi che sia visibile
-                                self.driver.execute_script("arguments[0].scrollIntoView(true);", element)
-                                time.sleep(1)
-                                
-                                # Clicca sul toggle
-                                element.click()
-                                time.sleep(2)  # Attendi caricamento
-                                
-                                logger.debug(f"  ✅ Toggle cliccato con selettore: {selector}")
-                                return True
-                        except Exception as e:
-                            logger.debug(f"  ⚠️ Errore clic toggle: {e}")
-                            continue
-                except Exception:
-                    continue
-            
-            logger.warning(f"  ⚠️ Toggle articoli venduti non trovato per {profile_name}")
-            return False
-            
-        except Exception as e:
-            logger.error(f"  ❌ Errore attivazione toggle: {e}")
-            return False
-    
-    def scrape_profile_revenue(self, profile_name: str, profile_id: str) -> Dict:
-        """Scrapa i prezzi degli articoli venduti per un singolo profilo"""
-        # Prima accediamo alla pagina normale del profilo
-        url = f"https://it.vestiairecollective.com/profile/{profile_id}/"
-        
-        profile_start_time = time.time()
-        sold_items_prices = []
-        total_revenue = 0.0
-        
-        try:
-            logger.info(f"💰 Scraping ricavi profilo: {profile_name} ({profile_id})")
-            
-            # Misurazione tempo di caricamento pagina
-            page_load_start = time.time()
-            self.driver.get(url)
-            
-            # Attendi il caricamento della pagina
-            time.sleep(5)
-            page_load_time = time.time() - page_load_start
-            
-            # Gestione cookie banner
-            self._handle_cookie_banner()
-            
-            # Verifica se la pagina è caricata correttamente
-            page_title = self.driver.title
-            if "403" in page_title or "404" in page_title or "error" in page_title.lower():
-                logger.error(f"❌ Pagina di errore rilevata per {profile_name}: {page_title}")
-                raise Exception(f"Pagina di errore: {page_title}")
-            
-            # Misurazione tempo di parsing
-            parse_start = time.time()
-            
-            # Attiva il toggle per gli articoli venduti
-            toggle_activated = self._activate_sold_toggle(profile_name)
-            
-            # Fallback: cerca anche il tab "sold" o "venduti"
-            sold_tab_found = False
-            if not toggle_activated:
-                logger.debug(f"  📍 Cercando tab sold/venduti come fallback per {profile_name}")
-                
-                sold_tab_selectors = [
-                    "//a[contains(text(), 'sold') or contains(text(), 'venduti')]",
-                    "//button[contains(text(), 'sold') or contains(text(), 'venduti')]",
-                    "//div[contains(text(), 'sold') or contains(text(), 'venduti')]",
-                    "//span[contains(text(), 'sold') or contains(text(), 'venduti')]",
-                    "//a[contains(@href, 'sold') or contains(@href, 'venduti')]",
-                    "//a[contains(@class, 'sold') or contains(@class, 'venduti')]"
-                ]
-                
-                for selector in sold_tab_selectors:
-                    try:
-                        elements = self.driver.find_elements(By.XPATH, selector)
-                        for element in elements:
-                            try:
-                                if element.is_displayed() and element.is_enabled():
-                                    element.click()
-                                    time.sleep(3)  # Attendi caricamento
-                                    sold_tab_found = True
-                                    logger.debug(f"  ✅ Tab sold trovato e cliccato con selettore: {selector}")
-                                    break
-                            except Exception as e:
-                                continue
-                        if sold_tab_found:
-                            break
-                    except Exception:
-                        continue
-                
-                if not sold_tab_found:
-                    logger.warning(f"  ⚠️ Tab sold non trovato per {profile_name}, continuo con la pagina corrente")
-            
-            # Cerca tutti gli elementi che potrebbero contenere prezzi nella sezione sold
-            price_elements = []
-            
-            # Cerca in diversi tipi di elementi specifici per items-for-sale
-            selectors = [
-                "//span[contains(@class, 'price') or contains(@class, 'Price')]",
-                "//div[contains(@class, 'price') or contains(@class, 'Price')]",
-                "//span[contains(@class, 'item-price')]",
-                "//div[contains(@class, 'item-price')]",
-                "//span[contains(text(), '€')]",
-                "//div[contains(text(), '€')]",
-                "//span[contains(text(), 'EUR')]",
-                "//div[contains(text(), 'EUR')]",
-                "//div[contains(@class, 'product-card')]//span[contains(text(), '€')]",
-                "//div[contains(@class, 'product-card')]//div[contains(text(), '€')]"
+                "//button[contains(text(), 'OK')]"
             ]
             
             for selector in selectors:
+                elements = self.driver.find_elements(By.XPATH, selector)
+                for element in elements:
+                    if element.is_displayed():
+                        element.click()
+                        time.sleep(1)
+                        return
+        except Exception:
+            pass
+    
+    def _activate_sold_toggle(self, profile_name: str) -> bool:
+        """Attiva toggle articoli venduti"""
+        try:
+            # Verifica se già attivo
+            active_selectors = [
+                "//div[contains(@class, 'toggle') and contains(@class, 'active')]",
+                "//button[contains(@class, 'toggle') and contains(@class, 'active')]"
+            ]
+            
+            for selector in active_selectors:
+                elements = self.driver.find_elements(By.XPATH, selector)
+                if elements:
+                    return True
+            
+            # Attiva toggle
+            toggle_selectors = [
+                "//div[contains(text(), 'Articoli venduti')]",
+                "//button[contains(text(), 'Articoli venduti')]",
+                "//div[contains(text(), 'venduti')]"
+            ]
+            
+            for selector in toggle_selectors:
+                elements = self.driver.find_elements(By.XPATH, selector)
+                for element in elements:
+                    if element.is_displayed():
+                        element.click()
+                        time.sleep(2)
+                        return True
+            
+            return False
+        except Exception:
+            return False
+    
+    def _navigate_to_items_section(self, profile_name: str, profile_id: str) -> bool:
+        """Naviga alla sezione articoli/prodotti del profilo"""
+        try:
+            logger.info(f"  🔄 Navigando alla sezione articoli per {profile_name}...")
+            
+            # Prova diverse URL per la sezione articoli
+            items_urls = [
+                f"https://it.vestiairecollective.com/profile/{profile_id}/items/",
+                f"https://it.vestiairecollective.com/profile/{profile_id}/products/",
+                f"https://it.vestiairecollective.com/profile/{profile_id}/articoli/",
+                f"https://it.vestiairecollective.com/profile/{profile_id}/prodotti/",
+                f"https://it.vestiairecollective.com/profile/{profile_id}/?view=items",
+                f"https://it.vestiairecollective.com/profile/{profile_id}/?section=items",
+            ]
+            
+            for url in items_urls:
                 try:
-                    elements = self.driver.find_elements(By.XPATH, selector)
-                    price_elements.extend(elements)
-                except Exception:
+                    logger.info(f"    Provando URL articoli: {url}")
+                    self.driver.get(url)
+                    time.sleep(5)  # Aspetta che si carichi
+                    
+                    # Controlla se la pagina contiene prezzi
+                    price_elements = self.driver.find_elements(By.XPATH, "//*[contains(text(), '€')]")
+                    if price_elements:
+                        logger.info(f"    ✅ URL articoli funzionante: {url} - Trovati {len(price_elements)} prezzi")
+                        return True
+                    else:
+                        logger.info(f"    ❌ URL articoli non funzionante: {url} - Nessun prezzo trovato")
+                        
+                except Exception as e:
+                    logger.warning(f"    Errore URL articoli {url}: {e}")
                     continue
             
-            # Estrai prezzi dagli elementi trovati
-            for element in price_elements:
-                try:
-                    text = element.text.strip()
-                    if text:
-                        price = self.extract_price_from_text(text)
-                        if price > 0:
-                            sold_items_prices.append(price)
-                            logger.debug(f"  💰 Prezzo trovato: €{price}")
-                except Exception as e:
-                    logger.debug(f"  ⚠️ Errore estrazione prezzo: {e}")
+            # Se nessuna URL funziona, torna alla pagina principale e cerca link
+            logger.info(f"    Tornando alla pagina principale per cercare link articoli...")
+            main_url = f"https://it.vestiairecollective.com/profile/{profile_id}/"
+            self.driver.get(main_url)
+            time.sleep(3)
             
-            # Se non abbiamo trovato prezzi, prova a cercare in tutto il contenuto della pagina
-            if not sold_items_prices:
-                logger.debug(f"  🔍 Ricerca prezzi nel contenuto completo per {profile_name}")
-                page_text = self.driver.page_source
-                
-                # Cerca pattern di prezzi nel testo della pagina
-                price_matches = re.findall(r'€\s*([\d,\.]+)|([\d,\.]+)\s*€', page_text)
-                for match in price_matches:
-                    price_str = match[0] if match[0] else match[1]
-                    if price_str:
-                        try:
-                            price = float(price_str.replace(',', '').replace('.', ''))
-                            if price > 0 and price < 10000:  # Filtra prezzi ragionevoli
-                                sold_items_prices.append(price)
-                        except ValueError:
-                            continue
+            # Cerca link verso articoli
+            items_link_selectors = [
+                "//a[contains(@href, 'items')]",
+                "//a[contains(@href, 'products')]",
+                "//a[contains(@href, 'articoli')]",
+                "//a[contains(@href, 'prodotti')]",
+                "//a[contains(text(), 'articoli')]",
+                "//a[contains(text(), 'prodotti')]",
+                "//a[contains(text(), 'items')]",
+                "//a[contains(text(), 'products')]",
+                "//button[contains(text(), 'articoli')]",
+                "//button[contains(text(), 'prodotti')]",
+                "//button[contains(text(), 'items')]",
+                "//button[contains(text(), 'products')]",
+            ]
             
-            # Ora otteniamo il numero reale di articoli venduti dai dati esistenti
-            real_sold_count = 0
-            
-            # Cerca nei dati esistenti dal sistema principale
-            if profile_name in self.existing_sales_data:
-                real_sold_count = self.existing_sales_data[profile_name].get('sales', 0)
-                logger.info(f"  📊 Usando dati esistenti: {real_sold_count} vendite reali per {profile_name}")
-            else:
-                # Fallback: cerca nella pagina per il numero di vendite totali
-                sold_count_selectors = [
-                    "//span[contains(text(), 'venduti')]",
-                    "//div[contains(text(), 'venduti')]",
-                    "//span[contains(text(), 'sold')]",
-                    "//div[contains(text(), 'sold')]"
-                ]
-                
-                for selector in sold_count_selectors:
+            for selector in items_link_selectors:
+                elements = self.driver.find_elements(By.XPATH, selector)
+                for element in elements:
                     try:
-                        elements = self.driver.find_elements(By.XPATH, selector)
-                        for element in elements:
+                        if element.is_displayed() and element.is_enabled():
+                            href = element.get_attribute("href")
                             text = element.text.strip()
-                            if text:
-                                # Estrai il numero di vendite dal testo
-                                import re
-                                numbers = re.findall(r'\d+', text)
-                                if numbers:
-                                    # Cerca il numero più grande che potrebbe essere il totale vendite
-                                    potential_counts = [int(n) for n in numbers if int(n) > 0 and int(n) < 100000]
-                                    if potential_counts:
-                                        # Prendi il numero più grande che sembra essere il totale
-                                        real_sold_count = max(potential_counts)
-                                        logger.info(f"  📊 Trovato numero vendite: {real_sold_count} da testo: '{text}'")
-                                        break
-                        if real_sold_count > 0:
-                            break
-                    except Exception:
+                            logger.info(f"    Cliccando su link articoli: '{text}' -> {href}")
+                            element.click()
+                            time.sleep(5)
+                            
+                            # Controlla se ora ci sono prezzi
+                            price_elements = self.driver.find_elements(By.XPATH, "//*[contains(text(), '€')]")
+                            if price_elements:
+                                logger.info(f"    ✅ Link articoli funzionante - Trovati {len(price_elements)} prezzi")
+                                return True
+                    except Exception as e:
+                        logger.warning(f"    Errore click link articoli: {e}")
                         continue
             
-            # Se non abbiamo trovato il numero reale, stimiamo basandomi sui prezzi estratti
-            if real_sold_count == 0:
-                # Stima: se abbiamo molti prezzi, probabilmente sono tutti venduti
-                # Se abbiamo pochi prezzi, potrebbero essere solo quelli visibili
-                if len(sold_items_prices) > 50:
-                    # Molti prezzi = probabilmente tutti venduti
-                    real_sold_count = len(sold_items_prices)
-                    logger.info(f"  📊 Stima: {real_sold_count} vendite (basato su {len(sold_items_prices)} prezzi estratti)")
-                else:
-                    # Pochi prezzi = potrebbero essere solo quelli visibili
-                    # Cerca di trovare il numero totale nella pagina
-                    page_text = self.driver.page_source
-                    import re
-                    # Cerca pattern come "X venduti" o "X sold"
-                    sold_patterns = [
-                        r'(\d+)\s+venduti',
-                        r'(\d+)\s+sold',
-                        r'venduti\s+(\d+)',
-                        r'sold\s+(\d+)'
+            logger.warning(f"  ⚠️ Non riuscito a navigare alla sezione articoli per {profile_name}")
+            return False
+            
+        except Exception as e:
+            logger.warning(f"  ⚠️ Errore navigazione articoli per {profile_name}: {e}")
+            return False
+
+    def _extract_final_sale_prices(self, profile_name: str, profile_id: str = None) -> list:
+        """Estrae specificamente i prezzi di vendita finali"""
+        try:
+            logger.info(f"  💰 Estrazione prezzi di vendita finali per {profile_name}...")
+            
+            # Aspetta che la pagina si carichi completamente
+            time.sleep(3)
+            
+            # Prima prova a navigare alla sezione articoli venduti
+            logger.info(f"    🔄 Tentativo navigazione sezione venduti...")
+            sold_section_found = self._navigate_to_sold_section(profile_name)
+            
+            if sold_section_found:
+                logger.info(f"    ✅ Sezione venduti trovata, cercando prezzi...")
+            else:
+                logger.info(f"    ⚠️ Sezione venduti non trovata, cercando nella pagina principale...")
+            
+            # Scroll per caricare contenuto dinamico
+            self.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+            time.sleep(2)
+            self.driver.execute_script("window.scrollTo(0, 0);")
+            time.sleep(2)
+            
+            # Selettori specifici per prezzi di vendita finali (non barrati)
+            final_price_selectors = [
+                # Selettori per prezzi finali in card prodotti
+                "//div[contains(@class, 'product-card')]//span[contains(text(), '€') and not(ancestor::*[contains(@class, 'strike')])]",
+                "//div[contains(@class, 'item-card')]//span[contains(text(), '€') and not(ancestor::*[contains(@class, 'strike')])]",
+                "//div[contains(@class, 'article-card')]//span[contains(text(), '€') and not(ancestor::*[contains(@class, 'strike')])]",
+                
+                # Selettori per prezzi finali specifici
+                "//span[contains(@class, 'final-price') and contains(text(), '€')]",
+                "//span[contains(@class, 'sale-price') and contains(text(), '€')]",
+                "//span[contains(@class, 'current-price') and contains(text(), '€')]",
+                
+                # Selettori per prezzi in elementi con classi specifiche
+                "//div[contains(@class, 'price-container')]//span[contains(text(), '€') and not(ancestor::*[contains(@class, 'original')])]",
+                "//div[contains(@class, 'price-wrapper')]//span[contains(text(), '€') and not(ancestor::*[contains(@class, 'old')])]",
+                
+                # Selettori generici ma filtrati
+                "//span[contains(text(), '€') and not(ancestor::*[contains(@class, 'strike')]) and not(ancestor::*[contains(@class, 'original')])]",
+                "//div[contains(text(), '€') and not(ancestor::*[contains(@class, 'strike')]) and not(ancestor::*[contains(@class, 'original')])]",
+            ]
+            
+            all_prices = []
+            
+            for i, selector in enumerate(final_price_selectors):
+                try:
+                    elements = self.driver.find_elements(By.XPATH, selector)
+                    logger.info(f"    Selettore prezzi finali {i+1}: trovati {len(elements)} elementi")
+                    
+                    for element in elements:
+                        try:
+                            text = element.text.strip()
+                            if text and '€' in text:
+                                # Estrai solo il numero prima di €
+                                price_match = re.search(r'(\d+(?:,\d+)?)\s*€', text)
+                                if price_match:
+                                    price_str = price_match.group(1).replace(',', '')
+                                    price = float(price_str)
+                                    
+                                    # Filtra prezzi ragionevoli (tra 10€ e 10000€)
+                                    if 10 <= price <= 10000:
+                                        all_prices.append(price)
+                                        logger.info(f"      Prezzo finale trovato: €{price:.2f} (da: '{text}')")
+                        except Exception as e:
+                            continue
+                            
+                except Exception as e:
+                    logger.warning(f"    Errore selettore {i+1}: {e}")
+                    continue
+            
+            # Rimuovi duplicati mantenendo l'ordine
+            unique_prices = []
+            seen_prices = set()
+            for price in all_prices:
+                if price not in seen_prices:
+                    unique_prices.append(price)
+                    seen_prices.add(price)
+            
+            logger.info(f"  💰 Trovati {len(unique_prices)} prezzi di vendita finali unici per {profile_name}")
+            
+            # Se non troviamo prezzi, prova a cercare nel testo della pagina
+            if not unique_prices:
+                logger.info(f"  🔍 Ricerca prezzi nel testo della pagina per {profile_name}...")
+                
+                body_text = self.driver.find_element(By.TAG_NAME, "body").text
+                price_matches = re.findall(r'(\d+(?:,\d+)?)\s*€', body_text)
+                
+                for match in price_matches:
+                    try:
+                        price_str = match.replace(',', '')
+                        price = float(price_str)
+                        
+                        # Filtra prezzi ragionevoli
+                        if 10 <= price <= 10000 and price not in seen_prices:
+                            unique_prices.append(price)
+                            seen_prices.add(price)
+                            logger.info(f"      Prezzo dal testo: €{price:.2f}")
+                    except Exception as e:
+                        continue
+            
+            # Se ancora non troviamo prezzi, prova URL dirette
+            if not unique_prices:
+                logger.info(f"  🔍 Tentativo URL dirette per {profile_name}...")
+                direct_url_success = self._try_direct_sold_urls(profile_name, profile_id)
+                if direct_url_success:
+                    # Riprova estrazione prezzi dopo navigazione
+                    for i, selector in enumerate(final_price_selectors):
+                        try:
+                            elements = self.driver.find_elements(By.XPATH, selector)
+                            logger.info(f"    Selettore prezzi diretti {i+1}: trovati {len(elements)} elementi")
+                            
+                            for element in elements:
+                                try:
+                                    text = element.text.strip()
+                                    if text and '€' in text:
+                                        price_match = re.search(r'(\d+(?:,\d+)?)\s*€', text)
+                                        if price_match:
+                                            price_str = price_match.group(1).replace(',', '')
+                                            price = float(price_str)
+                                            
+                                            if 10 <= price <= 10000 and price not in seen_prices:
+                                                unique_prices.append(price)
+                                                seen_prices.add(price)
+                                                logger.info(f"      Prezzo diretto trovato: €{price:.2f} (da: '{text}')")
+                                except Exception as e:
+                                    continue
+                        except Exception as e:
+                            continue
+            
+            # Se ancora non troviamo prezzi, analizza la struttura completa
+            if not unique_prices:
+                logger.info(f"  🔍 Analisi struttura completa per {profile_name}...")
+                self._analyze_page_structure_for_prices(profile_name)
+            
+            return unique_prices
+            
+        except Exception as e:
+            logger.warning(f"  ⚠️ Errore estrazione prezzi finali per {profile_name}: {e}")
+            return []
+
+    def _analyze_page_structure_for_prices(self, profile_name: str):
+        """Analizza la struttura della pagina per trovare prezzi nascosti"""
+        try:
+            logger.info(f"    🔍 Analisi struttura pagina per {profile_name}...")
+            
+            # 1. Analizza tutti gli elementi con testo
+            all_elements = self.driver.find_elements(By.XPATH, "//*[text()]")
+            logger.info(f"      Elementi con testo: {len(all_elements)}")
+            
+            # 2. Cerca elementi con €
+            euro_elements = self.driver.find_elements(By.XPATH, "//*[contains(text(), '€')]")
+            logger.info(f"      Elementi con €: {len(euro_elements)}")
+            
+            for i, element in enumerate(euro_elements[:10]):  # Mostra primi 10
+                try:
+                    text = element.text.strip()
+                    tag = element.tag_name
+                    class_name = element.get_attribute("class") or ""
+                    logger.info(f"        Elemento € {i+1}: '{text}' (tag: {tag}, class: {class_name})")
+                except Exception as e:
+                    continue
+            
+            # 3. Cerca elementi con numeri che potrebbero essere prezzi
+            number_elements = self.driver.find_elements(By.XPATH, "//*[contains(text(), '0') or contains(text(), '1') or contains(text(), '2') or contains(text(), '3') or contains(text(), '4') or contains(text(), '5') or contains(text(), '6') or contains(text(), '7') or contains(text(), '8') or contains(text(), '9')]")
+            logger.info(f"      Elementi con numeri: {len(number_elements)}")
+            
+            # 4. Analizza il testo completo della pagina
+            body_text = self.driver.find_element(By.TAG_NAME, "body").text
+            logger.info(f"      Testo completo: {len(body_text)} caratteri")
+            
+            # 5. Cerca pattern di prezzi nel testo
+            price_patterns = [
+                r'(\d+(?:,\d+)?)\s*€',
+                r'€\s*(\d+(?:,\d+)?)',
+                r'(\d+(?:,\d+)?)\s*EUR',
+                r'EUR\s*(\d+(?:,\d+)?)',
+                r'(\d+(?:,\d+)?)\s*euro',
+                r'euro\s*(\d+(?:,\d+)?)'
+            ]
+            
+            for pattern in price_patterns:
+                matches = re.findall(pattern, body_text, re.IGNORECASE)
+                if matches:
+                    logger.info(f"      Pattern '{pattern}': {len(matches)} matches - {matches[:5]}")
+            
+            # 6. Salva screenshot per debug
+            timestamp = int(time.time())
+            screenshot_path = f"debug_prices_{profile_name.replace(' ', '_')}_{timestamp}.png"
+            self.driver.save_screenshot(screenshot_path)
+            logger.info(f"      📸 Screenshot salvato: {screenshot_path}")
+            
+        except Exception as e:
+            logger.warning(f"    ⚠️ Errore analisi struttura: {e}")
+
+    def _try_direct_sold_urls(self, profile_name: str, profile_id: str) -> bool:
+        """Prova URL dirette per accedere agli articoli venduti"""
+        try:
+            logger.info(f"    🔗 Tentativo URL dirette per {profile_name}...")
+            
+            # URL da provare per articoli venduti
+            sold_urls = [
+                f"https://it.vestiairecollective.com/profile/{profile_id}/?filter=sold",
+                f"https://it.vestiairecollective.com/profile/{profile_id}/?tab=sold",
+                f"https://it.vestiairecollective.com/profile/{profile_id}/?view=sold",
+                f"https://it.vestiairecollective.com/profile/{profile_id}/?section=sold",
+                f"https://it.vestiairecollective.com/profile/{profile_id}/items/?filter=sold",
+                f"https://it.vestiairecollective.com/profile/{profile_id}/items/?tab=sold",
+                f"https://it.vestiairecollective.com/profile/{profile_id}/products/?filter=sold",
+                f"https://it.vestiairecollective.com/profile/{profile_id}/products/?tab=sold",
+                # URL con parametri italiani
+                f"https://it.vestiairecollective.com/profile/{profile_id}/?filter=venduti",
+                f"https://it.vestiairecollective.com/profile/{profile_id}/?tab=venduti",
+                f"https://it.vestiairecollective.com/profile/{profile_id}/items/?filter=venduti",
+                f"https://it.vestiairecollective.com/profile/{profile_id}/products/?filter=venduti"
+            ]
+            
+            for url in sold_urls:
+                try:
+                    logger.info(f"      Provando URL: {url}")
+                    self.driver.get(url)
+                    time.sleep(5)  # Aspetta che si carichi
+                    
+                    # Controlla se ora ci sono prezzi
+                    price_elements = self.driver.find_elements(By.XPATH, "//*[contains(text(), '€')]")
+                    if price_elements:
+                        logger.info(f"      ✅ URL funzionante: {url} - Trovati {len(price_elements)} prezzi")
+                        return True
+                    else:
+                        logger.info(f"      ❌ URL non funzionante: {url} - Nessun prezzo trovato")
+                        
+                except Exception as e:
+                    logger.warning(f"      Errore URL {url}: {e}")
+                    continue
+            
+            logger.warning(f"    ⚠️ Nessuna URL diretta funzionante per {profile_name}")
+            return False
+            
+        except Exception as e:
+            logger.warning(f"    ⚠️ Errore tentativo URL dirette per {profile_name}: {e}")
+            return False
+
+    def _test_user_navigation(self, profile_name: str, profile_id: str) -> bool:
+        """Test sistema utenti finti - navigazione base"""
+        try:
+            logger.info(f"  🧪 Test navigazione utente finto per {profile_name}...")
+            
+            # Inizializza driver se non esiste
+            if not self.driver:
+                self.setup_driver()
+            
+            # Test navigazione alla pagina profilo
+            url = f"https://it.vestiairecollective.com/profile/{profile_id}/"
+            self.driver.get(url)
+            time.sleep(3)
+            
+            # Verifica che la pagina sia caricata
+            page_title = self.driver.title
+            current_url = self.driver.current_url
+            
+            # Controlla se siamo sulla pagina giusta
+            if (profile_name.lower() in page_title.lower() or 
+                "vestiaire" in page_title.lower() or
+                profile_id in current_url or
+                "vestiairecollective.com" in current_url):
+                logger.info(f"    ✅ Navigazione riuscita: {page_title}")
+                logger.info(f"    📍 URL: {current_url}")
+                return True
+            else:
+                logger.warning(f"    ⚠️ Navigazione dubbia: {page_title}")
+                logger.warning(f"    📍 URL: {current_url}")
+                return False
+                
+        except Exception as e:
+            logger.error(f"    ❌ Errore test navigazione: {e}")
+            return False
+
+    def _test_flagging_algorithm(self, profile_name: str, profile_id: str) -> int:
+        """Test algoritmo flagging articoli venduti"""
+        try:
+            logger.info(f"  🏷️ Test flagging per {profile_name}...")
+            
+            # Inizializza driver se non esiste
+            if not self.driver:
+                self.setup_driver()
+            
+            # Naviga alla pagina
+            url = f"https://it.vestiairecollective.com/profile/{profile_id}/"
+            self.driver.get(url)
+            time.sleep(3)
+            
+            # Usa l'algoritmo di flagging esistente
+            real_sold_count = self._find_real_sold_count(profile_name)
+            
+            logger.info(f"    📊 Vendite trovate: {real_sold_count}")
+            return real_sold_count
+            
+        except Exception as e:
+            logger.error(f"    ❌ Errore test flagging: {e}")
+            return 0
+
+    def _test_price_extraction(self, profile_name: str, profile_id: str) -> list:
+        """Test estrazione prezzi di vendita finali"""
+        try:
+            logger.info(f"  💰 Test estrazione prezzi per {profile_name}...")
+            
+            # Inizializza driver se non esiste
+            if not self.driver:
+                self.setup_driver()
+            
+            # Naviga alla pagina
+            url = f"https://it.vestiairecollective.com/profile/{profile_id}/"
+            self.driver.get(url)
+            time.sleep(3)
+            
+            # Usa il metodo di estrazione prezzi esistente
+            prices = self._extract_final_sale_prices(profile_name, profile_id)
+            
+            logger.info(f"    📊 Prezzi estratti: {len(prices)}")
+            return prices
+            
+        except Exception as e:
+            logger.error(f"    ❌ Errore test prezzi: {e}")
+            return []
+
+    def _test_parallel_system(self, test_profiles: list) -> dict:
+        """Test sistema parallelo con profili di test"""
+        try:
+            logger.info(f"  ⚡ Test sistema parallelo con {len(test_profiles)} profili...")
+            
+            results = {}
+            
+            # Test sequenziale per ora (il parallelo sarà implementato dopo)
+            for profile_name in test_profiles:
+                if profile_name in VESTIAIRE_PROFILES:
+                    profile_id = VESTIAIRE_PROFILES[profile_name]
+                    
+                    logger.info(f"    🔍 Processando {profile_name}...")
+                    
+                    # Test completo per questo profilo
+                    sold_count = self._test_flagging_algorithm(profile_name, profile_id)
+                    prices = self._test_price_extraction(profile_name, profile_id)
+                    
+                    results[profile_name] = {
+                        'sold_count': sold_count,
+                        'prices_count': len(prices),
+                        'revenue': sum(prices)
+                    }
+            
+            return results
+            
+        except Exception as e:
+            logger.error(f"    ❌ Errore test parallelo: {e}")
+            return {}
+
+    def _navigate_to_sold_items_url(self, profile_name: str, profile_id: str) -> bool:
+        """Naviga direttamente alla sezione articoli venduti"""
+        try:
+            logger.info(f"  🔄 Navigando alla sezione articoli venduti per {profile_name}...")
+            
+            # Prova diverse URL per la sezione venduti
+            sold_urls = [
+                f"https://it.vestiairecollective.com/profile/{profile_id}/sold/",
+                f"https://it.vestiairecollective.com/profile/{profile_id}/items/sold/",
+                f"https://it.vestiairecollective.com/profile/{profile_id}/venduti/",
+                f"https://it.vestiairecollective.com/profile/{profile_id}/items/venduti/",
+                f"https://it.vestiairecollective.com/profile/{profile_id}/?filter=sold",
+                f"https://it.vestiairecollective.com/profile/{profile_id}/?tab=sold",
+            ]
+            
+            for url in sold_urls:
+                try:
+                    logger.info(f"    Provando URL: {url}")
+                    self.driver.get(url)
+                    time.sleep(5)  # Aspetta che si carichi
+                    
+                    # Controlla se la pagina contiene prezzi
+                    price_elements = self.driver.find_elements(By.XPATH, "//*[contains(text(), '€')]")
+                    if price_elements:
+                        logger.info(f"    ✅ URL funzionante: {url} - Trovati {len(price_elements)} prezzi")
+                        return True
+                    else:
+                        logger.info(f"    ❌ URL non funzionante: {url} - Nessun prezzo trovato")
+                        
+                except Exception as e:
+                    logger.warning(f"    Errore URL {url}: {e}")
+                    continue
+            
+            # Se nessuna URL funziona, torna alla pagina principale e cerca link
+            logger.info(f"    Tornando alla pagina principale per cercare link...")
+            main_url = f"https://it.vestiairecollective.com/profile/{profile_id}/"
+            self.driver.get(main_url)
+            time.sleep(3)
+            
+            # Cerca link verso articoli venduti
+            sold_link_selectors = [
+                "//a[contains(@href, 'sold')]",
+                "//a[contains(@href, 'venduti')]",
+                "//a[contains(text(), 'venduti')]",
+                "//a[contains(text(), 'sold')]",
+                "//button[contains(text(), 'venduti')]",
+                "//button[contains(text(), 'sold')]",
+            ]
+            
+            for selector in sold_link_selectors:
+                elements = self.driver.find_elements(By.XPATH, selector)
+                for element in elements:
+                    try:
+                        if element.is_displayed() and element.is_enabled():
+                            href = element.get_attribute("href")
+                            logger.info(f"    Cliccando su link venduti: {href}")
+                            element.click()
+                            time.sleep(5)
+                            
+                            # Controlla se ora ci sono prezzi
+                            price_elements = self.driver.find_elements(By.XPATH, "//*[contains(text(), '€')]")
+                            if price_elements:
+                                logger.info(f"    ✅ Link funzionante - Trovati {len(price_elements)} prezzi")
+                                return True
+                    except Exception as e:
+                        logger.warning(f"    Errore click link: {e}")
+                        continue
+            
+            logger.warning(f"  ⚠️ Non riuscito a navigare alla sezione articoli venduti per {profile_name}")
+            return False
+            
+        except Exception as e:
+            logger.warning(f"  ⚠️ Errore navigazione URL venduti per {profile_name}: {e}")
+            return False
+
+    def _debug_page_structure(self, profile_name: str):
+        """Analizza la struttura della pagina per debug"""
+        try:
+            logger.info(f"  🔍 Debug struttura pagina per {profile_name}...")
+            
+            # Salva screenshot
+            timestamp = int(time.time())
+            screenshot_path = f"debug_{profile_name.replace(' ', '_')}_{timestamp}.png"
+            self.driver.save_screenshot(screenshot_path)
+            logger.info(f"    📸 Screenshot salvato: {screenshot_path}")
+            
+            # Analizza tutti gli elementi con testo
+            all_elements = self.driver.find_elements(By.XPATH, "//*[text()]")
+            logger.info(f"    Elementi con testo: {len(all_elements)}")
+            
+            # Cerca elementi con prezzi
+            price_elements = self.driver.find_elements(By.XPATH, "//*[contains(text(), '€')]")
+            logger.info(f"    Elementi con €: {len(price_elements)}")
+            
+            for i, element in enumerate(price_elements[:10]):  # Primi 10
+                try:
+                    text = element.text.strip()
+                    tag_name = element.tag_name
+                    class_name = element.get_attribute("class") or ""
+                    logger.info(f"      Prezzo {i+1}: '{text}' (tag: {tag_name}, class: {class_name})")
+                except Exception as e:
+                    logger.warning(f"      Errore elemento {i+1}: {e}")
+            
+            # Cerca elementi con numeri (correzione XPath)
+            number_elements = self.driver.find_elements(By.XPATH, "//*[contains(text(), '0') or contains(text(), '1') or contains(text(), '2') or contains(text(), '3') or contains(text(), '4') or contains(text(), '5') or contains(text(), '6') or contains(text(), '7') or contains(text(), '8') or contains(text(), '9')]")
+            logger.info(f"    Elementi con numeri: {len(number_elements)}")
+            
+            # Cerca elementi con "venduti" o "sold"
+            sold_elements = self.driver.find_elements(By.XPATH, "//*[contains(text(), 'venduti') or contains(text(), 'sold')]")
+            logger.info(f"    Elementi con 'venduti/sold': {len(sold_elements)}")
+            
+            for i, element in enumerate(sold_elements[:5]):  # Primi 5
+                try:
+                    text = element.text.strip()
+                    tag_name = element.tag_name
+                    class_name = element.get_attribute("class") or ""
+                    logger.info(f"      Venduti {i+1}: '{text}' (tag: {tag_name}, class: {class_name})")
+                except Exception as e:
+                    logger.warning(f"      Errore elemento venduti {i+1}: {e}")
+            
+            # Analizza la struttura HTML
+            body_text = self.driver.find_element(By.TAG_NAME, "body").text
+            logger.info(f"    Testo body: {len(body_text)} caratteri")
+            
+            # Cerca pattern specifici nel testo
+            patterns_to_check = [
+                r'(\d+)\s*€',
+                r'€\s*(\d+)',
+                r'(\d+)\s+venduti',
+                r'(\d+)\s+sold',
+                r'Venduto',
+                r'Sold',
+            ]
+            
+            for pattern in patterns_to_check:
+                matches = re.findall(pattern, body_text, re.IGNORECASE)
+                if matches:
+                    logger.info(f"    Pattern '{pattern}': {len(matches)} matches - {matches[:5]}")
+            
+        except Exception as e:
+            logger.warning(f"  ⚠️ Errore debug struttura per {profile_name}: {e}")
+
+    def _navigate_to_sold_section(self, profile_name: str) -> bool:
+        """Naviga alla sezione articoli venduti"""
+        try:
+            logger.info(f"  🔄 Navigando alla sezione venduti per {profile_name}...")
+            
+            # 1. Cerca e clicca sul tab "venduti" o "sold"
+            sold_tab_selectors = [
+                # Selettori specifici per Vestiaire Collective
+                "//button[contains(text(), 'venduti')]",
+                "//div[contains(text(), 'venduti')]",
+                "//span[contains(text(), 'venduti')]",
+                "//a[contains(text(), 'venduti')]",
+                "//button[contains(text(), 'sold')]",
+                "//div[contains(text(), 'sold')]",
+                "//span[contains(text(), 'sold')]",
+                "//a[contains(text(), 'sold')]",
+                # Selettori con numeri specifici
+                "//button[contains(text(), '37')]",
+                "//div[contains(text(), '37')]",
+                "//span[contains(text(), '37')]",
+                "//button[contains(text(), '7306')]",
+                "//div[contains(text(), '7306')]",
+                "//span[contains(text(), '7306')]",
+                # Selettori per filtri
+                "//button[contains(text(), 'Hide Sold Products')]",
+                "//button[contains(text(), 'Nascondi prodotti venduti')]",
+                "//div[contains(text(), 'Hide Sold Products')]",
+                "//div[contains(text(), 'Nascondi prodotti venduti')]",
+                # Selettori per tab
+                "//a[contains(text(), 'Sold items')]",
+                "//a[contains(text(), 'Articoli venduti')]",
+                "//div[contains(text(), 'Sold items')]",
+                "//div[contains(text(), 'Articoli venduti')]",
+                # Selettori generici con numeri
+                "//*[contains(text(), '7306 sold')]",
+                "//*[contains(text(), '7306 venduti')]",
+                "//*[contains(text(), '37 sold')]",
+                "//*[contains(text(), '37 venduti')]"
+            ]
+            
+            for selector in sold_tab_selectors:
+                elements = self.driver.find_elements(By.XPATH, selector)
+                for element in elements:
+                    try:
+                        if element.is_displayed() and element.is_enabled():
+                            text = element.text.strip()
+                            logger.info(f"    Cliccando su: '{text}'")
+                            element.click()
+                            time.sleep(3)  # Aspetta che si carichi
+                            
+                            # Verifica se ora ci sono prezzi
+                            price_elements = self.driver.find_elements(By.XPATH, "//*[contains(text(), '€')]")
+                            if price_elements:
+                                logger.info(f"    ✅ Prezzi trovati dopo click: {len(price_elements)} elementi")
+                                return True
+                    except Exception as e:
+                        logger.warning(f"    Errore click su elemento: {e}")
+                        continue
+            
+            # 2. Se non trova tab, cerca filtri
+            filter_selectors = [
+                "//div[contains(@class, 'filter')]//button[contains(text(), 'venduti')]",
+                "//div[contains(@class, 'filter')]//div[contains(text(), 'venduti')]",
+                "//div[contains(@class, 'filter')]//span[contains(text(), 'venduti')]",
+            ]
+            
+            for selector in filter_selectors:
+                elements = self.driver.find_elements(By.XPATH, selector)
+                for element in elements:
+                    try:
+                        if element.is_displayed() and element.is_enabled():
+                            logger.info(f"    Cliccando su filtro: '{element.text}'")
+                            element.click()
+                            time.sleep(3)
+                            return True
+                    except Exception as e:
+                        continue
+            
+            # 3. Scroll per cercare elementi nascosti
+            logger.info(f"    Scrolling per cercare elementi venduti...")
+            self.driver.execute_script("window.scrollTo(0, 0);")
+            time.sleep(1)
+            
+            # Scroll graduale
+            for i in range(5):
+                self.driver.execute_script(f"window.scrollTo(0, {500 * (i+1)});")
+                time.sleep(1)
+                
+                # Controlla se appaiono prezzi
+                price_check = self.driver.find_elements(By.XPATH, "//*[contains(text(), '€')]")
+                if price_check:
+                    logger.info(f"    Trovati {len(price_check)} elementi con € dopo scroll {i+1}")
+                    return True
+            
+            logger.warning(f"  ⚠️ Non riuscito a navigare alla sezione venduti per {profile_name}")
+            return False
+            
+        except Exception as e:
+            logger.warning(f"  ⚠️ Errore navigazione sezione venduti per {profile_name}: {e}")
+            return False
+
+    def _analyze_vestiaire_structure(self, profile_name: str) -> int:
+        """Analizza la struttura specifica di Vestiaire Collective per trovare vendite reali"""
+        try:
+            # Aspetta che la pagina sia completamente caricata
+            time.sleep(3)
+            
+            logger.info(f"  🔍 Analizzando struttura Vestiaire per {profile_name}...")
+            
+            # 1. Cerca nei tab e filtri
+            tab_selectors = [
+                "//div[contains(@class, 'tab')]//span[contains(text(), 'venduti')]",
+                "//div[contains(@class, 'tab')]//span[contains(text(), 'sold')]",
+                "//button[contains(@class, 'tab')]//span[contains(text(), 'venduti')]",
+                "//button[contains(@class, 'tab')]//span[contains(text(), 'sold')]",
+                "//div[contains(@class, 'filter')]//span[contains(text(), 'venduti')]",
+                "//div[contains(@class, 'filter')]//span[contains(text(), 'sold')]",
+                # Selettori più generici
+                "//*[contains(text(), 'venduti')]",
+                "//*[contains(text(), 'sold')]",
+                "//*[contains(text(), '37')]",
+            ]
+            
+            for i, selector in enumerate(tab_selectors):
+                elements = self.driver.find_elements(By.XPATH, selector)
+                logger.info(f"    Selettore {i+1}: trovati {len(elements)} elementi")
+                
+                for j, element in enumerate(elements):
+                    try:
+                        text = element.text.strip()
+                        logger.info(f"      Elemento {j+1}: '{text}'")
+                        
+                        # Cerca il numero nel testo del tab
+                        numbers = re.findall(r'\d+', text)
+                        for num in numbers:
+                            count = int(num)
+                            if 1 <= count <= 1000:
+                                logger.info(f"  🔍 Tab trovato per {profile_name}: {count}")
+                                return count
+                    except Exception as e:
+                        logger.warning(f"      Errore elemento {j+1}: {e}")
+            
+            # 2. Cerca nei contatori di profilo
+            profile_counters = [
+                "//div[contains(@class, 'profile')]//span[contains(@class, 'count')]",
+                "//div[contains(@class, 'user')]//span[contains(@class, 'count')]",
+                "//div[contains(@class, 'stats')]//span[contains(@class, 'count')]",
+                "//div[contains(@class, 'metrics')]//span[contains(@class, 'count')]",
+                # Selettori più generici
+                "//span[contains(@class, 'count')]",
+                "//div[contains(@class, 'count')]",
+                "//*[contains(@class, 'count')]",
+            ]
+            
+            for i, selector in enumerate(profile_counters):
+                elements = self.driver.find_elements(By.XPATH, selector)
+                logger.info(f"    Contatore {i+1}: trovati {len(elements)} elementi")
+                
+                for j, element in enumerate(elements):
+                    try:
+                        text = element.text.strip()
+                        logger.info(f"      Contatore {j+1}: '{text}'")
+                        
+                        if text and text.isdigit():
+                            count = int(text)
+                            if 1 <= count <= 1000:
+                                logger.info(f"  🔍 Contatore profilo per {profile_name}: {count}")
+                                return count
+                    except Exception as e:
+                        logger.warning(f"      Errore contatore {j+1}: {e}")
+            
+            # 3. Cerca nei dati strutturati
+            structured_data_selectors = [
+                "//script[@type='application/ld+json']",
+                "//script[contains(text(), 'sold')]",
+                "//script[contains(text(), 'venduti')]",
+                "//script[contains(text(), '37')]",
+            ]
+            
+            for i, selector in enumerate(structured_data_selectors):
+                elements = self.driver.find_elements(By.XPATH, selector)
+                logger.info(f"    Script {i+1}: trovati {len(elements)} elementi")
+                
+                for j, element in enumerate(elements):
+                    try:
+                        script_content = element.get_attribute("innerHTML")
+                        if script_content:
+                            logger.info(f"      Script {j+1}: {len(script_content)} caratteri")
+                            
+                            # Cerca pattern JSON con vendite
+                            json_patterns = [
+                                r'"sold":\s*(\d+)',
+                                r'"items_sold":\s*(\d+)',
+                                r'"total_sold":\s*(\d+)',
+                                r'"venduti":\s*(\d+)',
+                                r'"articoli_venduti":\s*(\d+)',
+                                r'37',
+                            ]
+                            
+                            for pattern in json_patterns:
+                                matches = re.findall(pattern, script_content)
+                                if matches:
+                                    logger.info(f"        Pattern '{pattern}': {matches}")
+                                    if pattern == '37':
+                                        count = 37
+                                    else:
+                                        count = int(matches[0])
+                                    if 1 <= count <= 1000:
+                                        logger.info(f"  🔍 JSON strutturato per {profile_name}: {count}")
+                                        return count
+                    except Exception as e:
+                        logger.warning(f"      Errore script {j+1}: {e}")
+            
+            # 4. Cerca nei meta tag
+            meta_selectors = [
+                "//meta[@name='sold-items']",
+                "//meta[@name='items-sold']",
+                "//meta[@property='sold-items']",
+            ]
+            
+            for selector in meta_selectors:
+                elements = self.driver.find_elements(By.XPATH, selector)
+                for element in elements:
+                    content = element.get_attribute("content")
+                    if content and content.isdigit():
+                        count = int(content)
+                        if 1 <= count <= 1000:
+                            logger.info(f"  🔍 Meta tag per {profile_name}: {count}")
+                            return count
+            
+            # 5. Cerca nel testo visibile della pagina
+            visible_text = self.driver.find_element(By.TAG_NAME, "body").text
+            logger.info(f"    Testo visibile: {len(visible_text)} caratteri")
+            
+            # Salva screenshot per debug
+            try:
+                timestamp = int(time.time())
+                screenshot_path = f"debug_{profile_name.replace(' ', '_')}_{timestamp}.png"
+                self.driver.save_screenshot(screenshot_path)
+                logger.info(f"    📸 Screenshot salvato: {screenshot_path}")
+            except Exception as e:
+                logger.warning(f"    Errore screenshot: {e}")
+            
+            # Pattern per testo visibile
+            visible_patterns = [
+                r'(\d+)\s+articoli?\s+venduti',
+                r'(\d+)\s+pezzi?\s+venduti',
+                r'(\d+)\s+items?\s+sold',
+                r'(\d+)\s+pieces?\s+sold',
+                r'venduti[:\s]*(\d+)',
+                r'sold[:\s]*(\d+)',
+                r'\((\d+)\s+venduti\)',
+                r'\((\d+)\s+sold\)',
+                r'37',
+            ]
+            
+            for pattern in visible_patterns:
+                matches = re.findall(pattern, visible_text, re.IGNORECASE)
+                if matches:
+                    logger.info(f"    Pattern '{pattern}': {matches}")
+                    if pattern == '37':
+                        count = 37
+                    else:
+                        count = int(matches[0])
+                    if 1 <= count <= 1000:
+                        logger.info(f"  🔍 Testo visibile per {profile_name}: {count}")
+                        return count
+            
+            logger.warning(f"  ⚠️ Nessun contatore trovato per {profile_name}")
+            return 0
+            
+        except Exception as e:
+            logger.warning(f"  ⚠️ Errore analisi struttura Vestiaire per {profile_name}: {e}")
+            return 0
+
+    def _find_real_sold_count(self, profile_name: str) -> int:
+        """Cerca il numero reale di articoli venduti nella pagina"""
+        try:
+            # 1. Prima prova l'analisi specifica di Vestiaire
+            vestiaire_count = self._analyze_vestiaire_structure(profile_name)
+            if vestiaire_count > 0:
+                return vestiaire_count
+            
+            # 2. Cerca nei contatori principali
+            counter_selectors = [
+                "//div[contains(@class, 'counter')]//span",
+                "//span[contains(@class, 'count')]",
+                "//div[contains(@class, 'stats')]//span",
+                "//div[contains(@class, 'profile-stats')]//span",
+                "//div[contains(@class, 'user-stats')]//span",
+            ]
+            
+            for selector in counter_selectors:
+                elements = self.driver.find_elements(By.XPATH, selector)
+                for element in elements:
+                    text = element.text.strip()
+                    if text and text.isdigit():
+                        count = int(text)
+                        # Verifica se è un numero ragionevole (tra 1 e 1000)
+                        if 1 <= count <= 1000:
+                            logger.info(f"  🔍 Contatore trovato per {profile_name}: {count}")
+                            return count
+            
+            # 3. Cerca nei toggle e bottoni
+            toggle_selectors = [
+                "//button[contains(text(), 'venduti')]",
+                "//button[contains(text(), 'sold')]",
+                "//div[contains(text(), 'venduti')]",
+                "//div[contains(text(), 'sold')]",
+                "//span[contains(text(), 'venduti')]",
+                "//span[contains(text(), 'sold')]",
+            ]
+            
+            for selector in toggle_selectors:
+                elements = self.driver.find_elements(By.XPATH, selector)
+                for element in elements:
+                    text = element.text.strip()
+                    # Cerca numeri nel testo del toggle
+                    numbers = re.findall(r'\d+', text)
+                    for num in numbers:
+                        count = int(num)
+                        if 1 <= count <= 1000:
+                            logger.info(f"  🔍 Toggle trovato per {profile_name}: {count}")
+                            return count
+            
+            # 4. Cerca nel testo della pagina
+            page_text = self.driver.page_source
+            
+            # Pattern specifici per Vestiaire
+            vestiaire_patterns = [
+                r'(\d+)\s+articoli?\s+venduti',
+                r'(\d+)\s+pezzi?\s+venduti',
+                r'(\d+)\s+items?\s+sold',
+                r'(\d+)\s+pieces?\s+sold',
+                r'venduti[:\s]*(\d+)',
+                r'sold[:\s]*(\d+)',
+                r'\((\d+)\s+venduti\)',
+                r'\((\d+)\s+sold\)',
+            ]
+            
+            for pattern in vestiaire_patterns:
+                matches = re.findall(pattern, page_text, re.IGNORECASE)
+                if matches:
+                    count = int(matches[0])
+                    if 1 <= count <= 1000:
+                        logger.info(f"  🔍 Pattern trovato per {profile_name}: {count}")
+                        return count
+            
+            # 5. Cerca nei dati JSON nascosti
+            script_elements = self.driver.find_elements(By.TAG_NAME, "script")
+            for script in script_elements:
+                script_text = script.get_attribute("innerHTML")
+                if script_text:
+                    # Cerca dati JSON con informazioni vendite
+                    json_patterns = [
+                        r'"sold":\s*(\d+)',
+                        r'"venduti":\s*(\d+)',
+                        r'"items_sold":\s*(\d+)',
+                        r'"total_sold":\s*(\d+)',
                     ]
                     
-                    for pattern in sold_patterns:
-                        matches = re.findall(pattern, page_text, re.IGNORECASE)
+                    for pattern in json_patterns:
+                        matches = re.findall(pattern, script_text)
                         if matches:
-                            potential_count = int(matches[0])
-                            if potential_count > len(sold_items_prices):
-                                real_sold_count = potential_count
-                                logger.info(f"  📊 Trovato totale vendite: {real_sold_count} (pattern: {pattern})")
-                                break
-                    
-                    if real_sold_count == 0:
-                        real_sold_count = len(sold_items_prices)
-                        logger.warning(f"  ⚠️ Usando {real_sold_count} articoli estratti come stima per {profile_name}")
+                            count = int(matches[0])
+                            if 1 <= count <= 1000:
+                                logger.info(f"  🔍 JSON trovato per {profile_name}: {count}")
+                                return count
             
-            # Calcola il fattore di correzione per i ricavi
-            if real_sold_count > len(sold_items_prices):
-                # Abbiamo più vendite totali che prezzi estratti
-                # Calcola il prezzo medio e moltiplica per il totale
-                if sold_items_prices:
-                    avg_price = sum(sold_items_prices) / len(sold_items_prices)
-                    estimated_revenue = avg_price * real_sold_count
-                    logger.info(f"  📊 Stima ricavi: {len(sold_items_prices)} prezzi estratti, {real_sold_count} vendite totali")
-                    logger.info(f"  📊 Prezzo medio: €{avg_price:.2f}, Ricavi stimati: €{estimated_revenue:.2f}")
-                    total_revenue = estimated_revenue
-                else:
-                    total_revenue = 0
-            else:
-                # Usa i prezzi estratti direttamente
-                total_revenue = sum(sold_items_prices)
+            return 0
             
+        except Exception as e:
+            logger.warning(f"  ⚠️ Errore ricerca vendite reali per {profile_name}: {e}")
+            return 0
 
+    def extract_price_from_text(self, text: str) -> float:
+        """Estrae prezzo da testo"""
+        try:
+            # Cerca pattern prezzo
+            price_patterns = [
+                r'€\s*([\d,]+\.?\d*)',
+                r'EUR\s*([\d,]+\.?\d*)',
+                r'([\d,]+\.?\d*)\s*€',
+                r'([\d,]+\.?\d*)\s*EUR'
+            ]
             
-            parse_time = time.time() - parse_start
-            total_profile_time = time.time() - profile_start_time
+            for pattern in price_patterns:
+                matches = re.findall(pattern, text, re.IGNORECASE)
+                if matches:
+                    price_str = matches[0].replace(',', '')
+                    return float(price_str)
             
-            # Salva statistiche profilo
-            self.performance_stats["profile_times"][profile_name] = {
-                "total_time": total_profile_time,
-                "page_load_time": page_load_time,
-                "parse_time": parse_time,
-                "items_found": len(sold_items_prices),
-                "total_revenue": total_revenue,
-                "data_found": len(sold_items_prices) > 0
-            }
+            return 0.0
+        except Exception:
+            return 0.0
+    
+    def scrape_profile_revenue(self, profile_name: str, profile_id: str) -> Dict:
+        """Scrapa ricavi per un profilo"""
+        start_time = time.time()
+        
+        try:
+            if not self.driver:
+                self.setup_driver()
             
-            # Aggiorna fastest/slowest
-            if total_profile_time < self.performance_stats["fastest_profile"]["time"]:
-                self.performance_stats["fastest_profile"] = {
-                    "name": profile_name,
-                    "time": total_profile_time
-                }
-            if total_profile_time > self.performance_stats["slowest_profile"]["time"]:
-                self.performance_stats["slowest_profile"] = {
-                    "name": profile_name,
-                    "time": total_profile_time
-                }
+            # Naviga alla pagina
+            url = f"https://it.vestiairecollective.com/profile/{profile_id}/"
+            self.driver.get(url)
+            time.sleep(5)
             
-            logger.info(f"✅ {profile_name}: {len(sold_items_prices)} articoli venduti, €{total_revenue:.2f} ricavi (⏱️ {total_profile_time:.2f}s)")
+            # Gestione cookie
+            self._handle_cookie_banner()
+            
+            # Naviga alla sezione venduti
+            navigation_success = self._navigate_to_sold_section(profile_name)
+            
+            # Se non funziona, prova navigazione URL venduti
+            if not navigation_success:
+                navigation_success = self._navigate_to_sold_items_url(profile_name, profile_id)
+            
+            # Se non funziona, prova navigazione sezione articoli
+            if not navigation_success:
+                navigation_success = self._navigate_to_items_section(profile_name, profile_id)
+            
+            # Attiva toggle venduti (fallback finale)
+            if not navigation_success:
+                toggle_activated = self._activate_sold_toggle(profile_name)
+            
+            # Cerca numero vendite reali
+            real_sold_count = 0
+            if profile_name in self.existing_sales_data:
+                real_sold_count = self.existing_sales_data[profile_name].get('sales', 0)
+                logger.info(f"  📊 Dati esistenti per {profile_name}: {real_sold_count} vendite")
+            else:
+                # Usa il nuovo algoritmo di ricerca
+                real_sold_count = self._find_real_sold_count(profile_name)
+                
+                if real_sold_count > 0:
+                    logger.info(f"  ✅ Vendite reali trovate per {profile_name}: {real_sold_count}")
+                else:
+                    logger.warning(f"  ⚠️ Vendite reali non trovate per {profile_name}, uso stima")
+            
+            # Estrai prezzi di vendita finali
+            sold_items_prices = self._extract_final_sale_prices(profile_name)
+            
+            # Debug della struttura della pagina se non troviamo prezzi
+            if len(sold_items_prices) == 0:
+                self._debug_page_structure(profile_name)
+            
+            # Calcola ricavi
+            total_revenue = sum(sold_items_prices)
+            
+            # Se non abbiamo numero reale, usa prezzi estratti
+            if real_sold_count == 0:
+                real_sold_count = len(sold_items_prices)
+                logger.warning(f"  ⚠️ Usando {real_sold_count} prezzi estratti come stima per {profile_name}")
+            else:
+                logger.info(f"  📊 Vendite reali: {real_sold_count}, Prezzi estratti: {len(sold_items_prices)}")
+                
+                # Se abbiamo più prezzi che vendite, prendi solo i primi N
+                if len(sold_items_prices) > real_sold_count:
+                    sold_items_prices = sold_items_prices[:real_sold_count]
+                    total_revenue = sum(sold_items_prices)
+                    logger.info(f"  🔧 Limitato a {real_sold_count} prezzi per {profile_name}")
+                elif len(sold_items_prices) < real_sold_count:
+                    logger.warning(f"  ⚠️ Meno prezzi ({len(sold_items_prices)}) che vendite ({real_sold_count}) per {profile_name}")
+            
+            total_time = time.time() - start_time
             
             return {
                 "name": profile_name,
                 "profile_id": profile_id,
-                "url": url,
+                "success": True,
                 "sold_items_count": real_sold_count,
                 "total_revenue": total_revenue,
                 "sold_items_prices": sold_items_prices,
-                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
-                "success": True,
-                "data_quality": {
-                    "items_found": len(sold_items_prices) > 0,
-                    "real_sold_count_found": real_sold_count > 0,
-                    "page_title": page_title,
-                    "price_elements_found": len(price_elements)
-                },
-                "performance": {
-                    "total_time": total_profile_time,
-                    "page_load_time": page_load_time,
-                    "parse_time": parse_time
-                }
+                "performance": {"total_time": total_time}
             }
             
         except Exception as e:
-            total_profile_time = time.time() - profile_start_time
-            logger.error(f"❌ Errore nello scraping ricavi del profilo {profile_name}: {e}")
+            logger.error(f"Errore scraping {profile_name}: {e}")
             return {
                 "name": profile_name,
                 "profile_id": profile_id,
-                "url": url,
+                "success": False,
+                "error": str(e),
                 "sold_items_count": 0,
                 "total_revenue": 0.0,
                 "sold_items_prices": [],
-                "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
-                "success": False,
-                "error": str(e),
-                "performance": {
-                    "total_time": total_profile_time,
-                    "page_load_time": 0,
-                    "parse_time": 0
-                }
+                "performance": {"total_time": time.time() - start_time}
             }
     
     def scrape_all_profiles_revenue(self) -> List[Dict]:
-        """Scrapa i ricavi per tutti i profili configurati"""
-        logger.info("🚀 Avvio scraping ricavi per tutti i profili...")
-        
-        start_time = time.time()
-        results = []
+        """Scrapa tutti i profili"""
+        logger.info("Avvio scraping ricavi...")
         
         try:
-            # Usa processing parallelo per ottimizzare le performance
-            results = self._scrape_profiles_parallel()
+            from config import OPTIMIZATION_CONFIG
+            max_workers = OPTIMIZATION_CONFIG.get("max_parallel_workers", 3)
             
-        except Exception as e:
-            logger.error(f"❌ Errore critico nello scraping parallelo: {e}")
-            # Fallback allo scraping sequenziale
-            logger.info("🔄 Fallback allo scraping sequenziale...")
-            results = self._scrape_profiles_sequential()
-        
-        # Calcola statistiche performance
-        total_time = time.time() - start_time
-        self.performance_stats["total_scraping_time"] = total_time
-        
-        if results:
-            profile_times = [r.get("performance", {}).get("total_time", 0) for r in results if r.get("success")]
-            if profile_times:
-                self.performance_stats["average_profile_time"] = sum(profile_times) / len(profile_times)
-                
-                # Trova profilo più veloce e più lento
-                fastest_idx = profile_times.index(min(profile_times))
-                slowest_idx = profile_times.index(max(profile_times))
-                
-                self.performance_stats["fastest_profile"] = {
-                    "name": results[fastest_idx]["name"],
-                    "time": profile_times[fastest_idx]
+            # Scraping parallelo
+            with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+                futures = {
+                    executor.submit(self.scrape_profile_revenue, name, id): (name, id)
+                    for name, id in self.profiles.items()
                 }
-                self.performance_stats["slowest_profile"] = {
-                    "name": results[slowest_idx]["name"],
-                    "time": profile_times[slowest_idx]
-                }
-        
-        self._log_performance_summary()
-        return results
-    
-    def _scrape_profiles_parallel(self, max_workers: int = None) -> List[Dict]:
-        """Scrapa i profili in parallelo usando ThreadPoolExecutor"""
-        if max_workers is None:
-            # Carica configurazione
-            try:
-                from config import OPTIMIZATION_CONFIG
-                max_workers = OPTIMIZATION_CONFIG.get("max_parallel_workers", 3)
-            except ImportError:
-                max_workers = 3
-        
-        logger.info(f"⚡ Avvio scraping parallelo con {max_workers} workers...")
-        
-        results = []
-        
-        # Crea un lock per thread safety
-        lock = threading.Lock()
-        
-        def scrape_single_profile(profile_data):
-            """Funzione per scraping singolo profilo"""
-            profile_name, profile_id = profile_data
-            
-            # Crea un nuovo driver per ogni thread
-            thread_driver = None
-            try:
-                thread_driver = self._create_thread_driver()
                 
-                # Crea una nuova istanza dello scraper per questo thread
-                thread_scraper = RevenueScraper(profiles={profile_name: profile_id}, 
-                                              existing_sales_data=self.existing_sales_data)
-                thread_scraper.driver = thread_driver
-                
-                result = thread_scraper.scrape_profile_revenue(profile_name, profile_id)
-                
-                # Thread-safe logging
-                with lock:
-                    logger.info(f"✅ Completato {profile_name} (thread)")
-                
-                return result
-                
-            except Exception as e:
-                logger.error(f"❌ Errore thread {profile_name}: {e}")
-                return {
-                    "name": profile_name,
-                    "profile_id": profile_id,
-                    "success": False,
-                    "error": str(e),
-                    "sold_items_count": 0,
-                    "total_revenue": 0.0,
-                    "sold_items_prices": [],
-                    "performance": {"page_load_time": 0, "parse_time": 0, "total_time": 0},
-                    "data_quality": {"items_found": False, "real_sold_count_found": False, "page_title": "", "price_elements_found": 0}
-                }
-            finally:
-                if thread_driver:
+                results = []
+                for future in concurrent.futures.as_completed(futures):
                     try:
-                        thread_driver.quit()
-                    except:
-                        pass
-        
-        # Esegui scraping parallelo
-        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
-            # Sottometti tutti i lavori
-            future_to_profile = {
-                executor.submit(scrape_single_profile, (name, id)): (name, id) 
-                for name, id in self.profiles.items()
-            }
+                        result = future.result()
+                        results.append(result)
+                    except Exception as e:
+                        name, id = futures[future]
+                        results.append({
+                            "name": name,
+                            "profile_id": id,
+                            "success": False,
+                            "error": str(e),
+                            "sold_items_count": 0,
+                            "total_revenue": 0.0,
+                            "sold_items_prices": [],
+                            "performance": {"total_time": 0}
+                        })
             
-            # Raccogli i risultati
-            for future in concurrent.futures.as_completed(future_to_profile):
-                profile_name, profile_id = future_to_profile[future]
-                try:
-                    result = future.result()
-                    results.append(result)
-                except Exception as e:
-                    logger.error(f"❌ Errore futuro per {profile_name}: {e}")
-                    results.append({
-                        "name": profile_name,
-                        "profile_id": profile_id,
-                        "success": False,
-                        "error": str(e),
-                        "sold_items_count": 0,
-                        "total_revenue": 0.0,
-                        "sold_items_prices": [],
-                        "performance": {"page_load_time": 0, "parse_time": 0, "total_time": 0},
-                        "data_quality": {"items_found": False, "real_sold_count_found": False, "page_title": "", "price_elements_found": 0}
-                    })
-        
-        return results
-    
-    def _scrape_profiles_sequential(self) -> List[Dict]:
-        """Scrapa i profili in modo sequenziale (fallback)"""
-        logger.info("🔄 Avvio scraping sequenziale...")
-        
-        if not self.driver:
-            self.setup_driver()
-        
-        results = []
-        
-        try:
-            for profile_name, profile_id in self.profiles.items():
-                try:
-                    result = self.scrape_profile_revenue(profile_name, profile_id)
-                    results.append(result)
-                    
-                    # Pausa tra i profili per evitare rate limiting
-                    if len(results) < len(self.profiles):
-                        time.sleep(3)
-                        
-                except Exception as e:
-                    logger.error(f"❌ Errore scraping profilo {profile_name}: {e}")
-                    results.append({
-                        "name": profile_name,
-                        "profile_id": profile_id,
-                        "success": False,
-                        "error": str(e),
-                        "sold_items_count": 0,
-                        "total_revenue": 0.0,
-                        "sold_items_prices": [],
-                        "performance": {"page_load_time": 0, "parse_time": 0, "total_time": 0},
-                        "data_quality": {"items_found": False, "real_sold_count_found": False, "page_title": "", "price_elements_found": 0}
-                    })
-        
-        finally:
-            if self.driver:
-                self.driver.quit()
-                self.driver = None
-        
-        return results
-    
-    def _create_thread_driver(self):
-        """Crea un nuovo driver Chrome per un thread"""
-        try:
-            chrome_options = Options()
-            chrome_options.add_argument("--headless")
-            chrome_options.add_argument("--no-sandbox")
-            chrome_options.add_argument("--disable-dev-shm-usage")
-            chrome_options.add_argument("--disable-gpu")
-            chrome_options.add_argument("--window-size=1920,1080")
-            chrome_options.add_argument("--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36")
-            
-            # Gestione specifica per macOS
-            import platform
-            if platform.system() == "Darwin":
-                chrome_options.binary_location = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
-                chrome_options.add_argument("--disable-blink-features=AutomationControlled")
-                chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-                chrome_options.add_experimental_option('useAutomationExtension', False)
-            
-            # Ottieni il percorso del ChromeDriver
-            driver_path = ChromeDriverManager().install()
-            if driver_path.endswith('THIRD_PARTY_NOTICES.chromedriver'):
-                driver_path = driver_path.replace('THIRD_PARTY_NOTICES.chromedriver', 'chromedriver')
-            
-            service = Service(driver_path)
-            return webdriver.Chrome(service=service, options=chrome_options)
+            return results
             
         except Exception as e:
-            logger.error(f"Errore creazione thread driver: {e}")
-            raise
-    
-    def _log_performance_summary(self):
-        """Mostra un riassunto delle performance"""
-        stats = self.performance_stats
-        
-        print("\n" + "="*60)
-        print("💰 REPORT PERFORMANCE REVENUE SCRAPING")
-        print("="*60)
-        print(f"⏱️  Tempo setup driver: {stats['driver_setup_time']:.2f}s")
-        print(f"⏱️  Tempo totale scraping: {stats['total_scraping_time']:.2f}s")
-        print(f"⏱️  Tempo medio per profilo: {stats['average_profile_time']:.2f}s")
-        print(f"🏆 Profilo più veloce: {stats['fastest_profile']['name']} ({stats['fastest_profile']['time']:.2f}s)")
-        print(f"🐌 Profilo più lento: {stats['slowest_profile']['name']} ({stats['slowest_profile']['time']:.2f}s)")
-        print(f"👥 Profili processati: {len(stats['profile_times'])}")
-        
-        print("\n📋 DETTAGLI PER PROFILO:")
-        print("-" * 60)
-        for name, data in stats["profile_times"].items():
-            print(f"{name:20} | {data['total_time']:6.2f}s | Items: {data['items_found']:3d} | Revenue: €{data['total_revenue']:8.2f}")
-        
-        # Calcolo efficienza
-        total_wait_time = (len(self.profiles) - 1) * 3
-        active_work_time = stats['total_scraping_time'] - total_wait_time
-        efficiency = (active_work_time / stats['total_scraping_time']) * 100 if stats['total_scraping_time'] > 0 else 0
-        
-        print(f"\n⚡ EFFICIENZA:")
-        print(f"   Tempo di lavoro effettivo: {active_work_time:.2f}s")
-        print(f"   Tempo di attesa totale: {total_wait_time:.2f}s")
-        print(f"   Efficienza: {efficiency:.1f}%")
-        print("="*60)
-    
-    def get_performance_stats(self) -> Dict:
-        """Restituisce le statistiche di performance"""
-        return self.performance_stats
-    
-    def calculate_revenue_totals(self, results: List[Dict]) -> Dict:
-        """Calcola i totali dei ricavi"""
-        total_items = sum(result.get('sold_items_count', 0) for result in results)
-        total_revenue = sum(result.get('total_revenue', 0.0) for result in results)
-        
-        return {
-            "total_sold_items": total_items,
-            "total_revenue": total_revenue,
-            "profiles_count": len(results)
-        }
-
-def main():
-    """Funzione principale per testare lo scraper ricavi"""
-    scraper = RevenueScraper()
-    results = scraper.scrape_all_profiles_revenue()
-    
-    print("=== RISULTATI REVENUE SCRAPING ===")
-    for result in results:
-        print(f"{result['name']}: {result['sold_items_count']} articoli venduti, €{result['total_revenue']:.2f} ricavi")
-    
-    totals = scraper.calculate_revenue_totals(results)
-    print(f"\nTOTALI: {totals['total_sold_items']} articoli venduti, €{totals['total_revenue']:.2f} ricavi totali")
-
-if __name__ == "__main__":
-    main() 
+            logger.error(f"Errore scraping parallelo: {e}")
+            # Fallback sequenziale
+            results = []
+            for name, id in self.profiles.items():
+                result = self.scrape_profile_revenue(name, id)
+                results.append(result)
+            return results 

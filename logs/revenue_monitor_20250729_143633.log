@@ -1,0 +1,154 @@
+2025-07-29 14:36:33,908 - root - INFO - === TEST REVENUE SCRAPING ===
+2025-07-29 14:36:33,911 - root - INFO - 🔍 Ottenimento dati vendite esistenti...
+2025-07-29 14:36:33,922 - root - WARNING - ⚠️ Impossibile ottenere dati esistenti: No module named 'scraper'
+2025-07-29 14:36:33,923 - root - INFO - 🔍 Inizializzazione revenue scraper...
+2025-07-29 14:36:33,923 - root - INFO - ⚡ Configurazione parallelo: 3 workers, abilitato: True
+2025-07-29 14:36:33,923 - revenue_scraper - INFO - 🚀 Avvio scraping ricavi per tutti i profili...
+2025-07-29 14:36:33,927 - revenue_scraper - INFO - ⚡ Avvio scraping parallelo con 3 workers...
+2025-07-29 14:36:33,990 - WDM - INFO - ====== WebDriver manager ======
+2025-07-29 14:36:33,995 - WDM - INFO - ====== WebDriver manager ======
+2025-07-29 14:36:33,997 - WDM - INFO - ====== WebDriver manager ======
+2025-07-29 14:36:35,268 - WDM - INFO - Get LATEST chromedriver version for google-chrome
+2025-07-29 14:36:35,293 - WDM - INFO - Get LATEST chromedriver version for google-chrome
+2025-07-29 14:36:35,300 - WDM - INFO - Get LATEST chromedriver version for google-chrome
+2025-07-29 14:36:36,283 - WDM - INFO - Get LATEST chromedriver version for google-chrome
+2025-07-29 14:36:36,284 - WDM - INFO - Get LATEST chromedriver version for google-chrome
+2025-07-29 14:36:36,284 - WDM - INFO - Get LATEST chromedriver version for google-chrome
+2025-07-29 14:36:36,517 - WDM - INFO - Driver [/Users/flavio.lombardi/.wdm/drivers/chromedriver/mac64/138.0.7204.168/chromedriver-mac-x64/chromedriver] found in cache
+2025-07-29 14:36:36,518 - WDM - INFO - Driver [/Users/flavio.lombardi/.wdm/drivers/chromedriver/mac64/138.0.7204.168/chromedriver-mac-x64/chromedriver] found in cache
+2025-07-29 14:36:36,536 - WDM - INFO - Driver [/Users/flavio.lombardi/.wdm/drivers/chromedriver/mac64/138.0.7204.168/chromedriver-mac-x64/chromedriver] found in cache
+2025-07-29 14:36:40,539 - revenue_scraper - INFO - 💰 Scraping ricavi profilo: stephanie (9168643)
+2025-07-29 14:36:41,085 - revenue_scraper - INFO - 💰 Scraping ricavi profilo: Volodymyr (5924329)
+2025-07-29 14:36:41,513 - revenue_scraper - INFO - 💰 Scraping ricavi profilo: Rediscover (2039815)
+2025-07-29 14:36:54,887 - revenue_scraper - WARNING -   ⚠️ Toggle articoli venduti non trovato per stephanie
+2025-07-29 14:36:54,954 - revenue_scraper - WARNING -   ⚠️ Tab sold non trovato per stephanie, continuo con la pagina corrente
+2025-07-29 14:36:57,429 - revenue_scraper - WARNING -   ⚠️ Toggle articoli venduti non trovato per Volodymyr
+2025-07-29 14:36:57,472 - revenue_scraper - INFO -   📊 Stima: 180 vendite (basato su 180 prezzi estratti)
+2025-07-29 14:36:57,473 - revenue_scraper - INFO - ✅ stephanie: 180 articoli venduti, €55326.00 ricavi (⏱️ 16.93s)
+2025-07-29 14:36:57,473 - revenue_scraper - INFO - ✅ Completato stephanie (thread)
+2025-07-29 14:36:57,527 - revenue_scraper - WARNING -   ⚠️ Tab sold non trovato per Volodymyr, continuo con la pagina corrente
+2025-07-29 14:36:57,761 - WDM - INFO - ====== WebDriver manager ======
+2025-07-29 14:36:58,464 - revenue_scraper - WARNING -   ⚠️ Toggle articoli venduti non trovato per Rediscover
+2025-07-29 14:36:58,503 - WDM - INFO - Get LATEST chromedriver version for google-chrome
+2025-07-29 14:36:58,551 - revenue_scraper - WARNING -   ⚠️ Tab sold non trovato per Rediscover, continuo con la pagina corrente
+2025-07-29 14:36:58,660 - WDM - INFO - Get LATEST chromedriver version for google-chrome
+2025-07-29 14:36:58,792 - WDM - INFO - Driver [/Users/flavio.lombardi/.wdm/drivers/chromedriver/mac64/138.0.7204.168/chromedriver-mac-x64/chromedriver] found in cache
+2025-07-29 14:37:01,272 - revenue_scraper - INFO - 💰 Scraping ricavi profilo: Mark (13442939)
+2025-07-29 14:37:01,561 - revenue_scraper - INFO -   📊 Stima: 210 vendite (basato su 210 prezzi estratti)
+2025-07-29 14:37:01,561 - revenue_scraper - INFO - ✅ Volodymyr: 210 articoli venduti, €74622.00 ricavi (⏱️ 20.48s)
+2025-07-29 14:37:01,561 - revenue_scraper - INFO - ✅ Completato Volodymyr (thread)
+2025-07-29 14:37:01,906 - WDM - INFO - ====== WebDriver manager ======
+2025-07-29 14:37:02,399 - revenue_scraper - INFO -   📊 Stima: 180 vendite (basato su 180 prezzi estratti)
+2025-07-29 14:37:02,400 - revenue_scraper - INFO - ✅ Rediscover: 180 articoli venduti, €81936.00 ricavi (⏱️ 20.89s)
+2025-07-29 14:37:02,401 - revenue_scraper - INFO - ✅ Completato Rediscover (thread)
+2025-07-29 14:37:02,688 - WDM - INFO - ====== WebDriver manager ======
+2025-07-29 14:37:02,697 - WDM - INFO - Get LATEST chromedriver version for google-chrome
+2025-07-29 14:37:02,829 - WDM - INFO - Get LATEST chromedriver version for google-chrome
+2025-07-29 14:37:02,939 - WDM - INFO - Driver [/Users/flavio.lombardi/.wdm/drivers/chromedriver/mac64/138.0.7204.168/chromedriver-mac-x64/chromedriver] found in cache
+2025-07-29 14:37:03,096 - WDM - INFO - Get LATEST chromedriver version for google-chrome
+2025-07-29 14:37:03,190 - WDM - INFO - Get LATEST chromedriver version for google-chrome
+2025-07-29 14:37:03,287 - WDM - INFO - Driver [/Users/flavio.lombardi/.wdm/drivers/chromedriver/mac64/138.0.7204.168/chromedriver-mac-x64/chromedriver] found in cache
+2025-07-29 14:37:04,608 - revenue_scraper - INFO - 💰 Scraping ricavi profilo: A Retro Tale (5537180)
+2025-07-29 14:37:04,609 - revenue_scraper - INFO - 💰 Scraping ricavi profilo: Lapsa (11345596)
+2025-07-29 14:37:15,743 - revenue_scraper - WARNING -   ⚠️ Toggle articoli venduti non trovato per Mark
+2025-07-29 14:37:15,810 - revenue_scraper - WARNING -   ⚠️ Tab sold non trovato per Mark, continuo con la pagina corrente
+2025-07-29 14:37:17,788 - revenue_scraper - INFO -   📊 Stima: 180 vendite (basato su 180 prezzi estratti)
+2025-07-29 14:37:17,788 - revenue_scraper - INFO - ✅ Mark: 180 articoli venduti, €60369.00 ricavi (⏱️ 16.52s)
+2025-07-29 14:37:17,788 - revenue_scraper - INFO - ✅ Completato Mark (thread)
+2025-07-29 14:37:17,994 - WDM - INFO - ====== WebDriver manager ======
+2025-07-29 14:37:18,270 - revenue_scraper - WARNING -   ⚠️ Toggle articoli venduti non trovato per A Retro Tale
+2025-07-29 14:37:18,367 - revenue_scraper - WARNING -   ⚠️ Tab sold non trovato per A Retro Tale, continuo con la pagina corrente
+2025-07-29 14:37:18,489 - WDM - INFO - Get LATEST chromedriver version for google-chrome
+2025-07-29 14:37:18,595 - WDM - INFO - Get LATEST chromedriver version for google-chrome
+2025-07-29 14:37:18,646 - revenue_scraper - WARNING -   ⚠️ Toggle articoli venduti non trovato per Lapsa
+2025-07-29 14:37:18,684 - WDM - INFO - Driver [/Users/flavio.lombardi/.wdm/drivers/chromedriver/mac64/138.0.7204.168/chromedriver-mac-x64/chromedriver] found in cache
+2025-07-29 14:37:18,727 - revenue_scraper - WARNING -   ⚠️ Tab sold non trovato per Lapsa, continuo con la pagina corrente
+2025-07-29 14:37:20,394 - revenue_scraper - INFO - 💰 Scraping ricavi profilo: Clara (27862876)
+2025-07-29 14:37:21,416 - revenue_scraper - INFO -   📊 Stima: 180 vendite (basato su 180 prezzi estratti)
+2025-07-29 14:37:21,417 - revenue_scraper - INFO - ✅ A Retro Tale: 180 articoli venduti, €159456.00 ricavi (⏱️ 16.81s)
+2025-07-29 14:37:21,418 - revenue_scraper - INFO - ✅ Completato A Retro Tale (thread)
+2025-07-29 14:37:21,627 - WDM - INFO - ====== WebDriver manager ======
+2025-07-29 14:37:22,390 - WDM - INFO - Get LATEST chromedriver version for google-chrome
+2025-07-29 14:37:22,504 - WDM - INFO - Get LATEST chromedriver version for google-chrome
+2025-07-29 14:37:22,626 - WDM - INFO - Driver [/Users/flavio.lombardi/.wdm/drivers/chromedriver/mac64/138.0.7204.168/chromedriver-mac-x64/chromedriver] found in cache
+2025-07-29 14:37:24,492 - revenue_scraper - INFO - 💰 Scraping ricavi profilo: Baggy Vintage (18106856)
+2025-07-29 14:37:24,567 - revenue_scraper - INFO -   📊 Stima: 360 vendite (basato su 360 prezzi estratti)
+2025-07-29 14:37:24,567 - revenue_scraper - INFO - ✅ Lapsa: 360 articoli venduti, €368070.00 ricavi (⏱️ 19.96s)
+2025-07-29 14:37:24,568 - revenue_scraper - INFO - ✅ Completato Lapsa (thread)
+2025-07-29 14:37:24,892 - WDM - INFO - ====== WebDriver manager ======
+2025-07-29 14:37:25,545 - WDM - INFO - Get LATEST chromedriver version for google-chrome
+2025-07-29 14:37:25,699 - WDM - INFO - Get LATEST chromedriver version for google-chrome
+2025-07-29 14:37:25,824 - WDM - INFO - Driver [/Users/flavio.lombardi/.wdm/drivers/chromedriver/mac64/138.0.7204.168/chromedriver-mac-x64/chromedriver] found in cache
+2025-07-29 14:37:27,812 - revenue_scraper - INFO - 💰 Scraping ricavi profilo: Vintageandkickz (19199976)
+2025-07-29 14:37:36,043 - revenue_scraper - WARNING -   ⚠️ Toggle articoli venduti non trovato per Clara
+2025-07-29 14:37:36,149 - revenue_scraper - WARNING -   ⚠️ Tab sold non trovato per Clara, continuo con la pagina corrente
+2025-07-29 14:37:39,852 - revenue_scraper - INFO -   📊 Stima: 183 vendite (basato su 183 prezzi estratti)
+2025-07-29 14:37:39,852 - revenue_scraper - INFO - ✅ Clara: 183 articoli venduti, €247869.00 ricavi (⏱️ 19.46s)
+2025-07-29 14:37:39,866 - revenue_scraper - INFO - ✅ Completato Clara (thread)
+2025-07-29 14:37:40,215 - revenue_scraper - WARNING -   ⚠️ Toggle articoli venduti non trovato per Baggy Vintage
+2025-07-29 14:37:40,258 - WDM - INFO - ====== WebDriver manager ======
+2025-07-29 14:37:40,336 - revenue_scraper - WARNING -   ⚠️ Tab sold non trovato per Baggy Vintage, continuo con la pagina corrente
+2025-07-29 14:37:41,597 - WDM - INFO - Get LATEST chromedriver version for google-chrome
+2025-07-29 14:37:41,795 - WDM - INFO - Get LATEST chromedriver version for google-chrome
+2025-07-29 14:37:41,965 - WDM - INFO - Driver [/Users/flavio.lombardi/.wdm/drivers/chromedriver/mac64/138.0.7204.168/chromedriver-mac-x64/chromedriver] found in cache
+2025-07-29 14:37:42,603 - revenue_scraper - WARNING -   ⚠️ Toggle articoli venduti non trovato per Vintageandkickz
+2025-07-29 14:37:42,733 - revenue_scraper - WARNING -   ⚠️ Tab sold non trovato per Vintageandkickz, continuo con la pagina corrente
+2025-07-29 14:37:44,528 - revenue_scraper - INFO - 💰 Scraping ricavi profilo: Vintage & Modern (29517320)
+2025-07-29 14:37:44,615 - revenue_scraper - INFO -   📊 Stima: 180 vendite (basato su 180 prezzi estratti)
+2025-07-29 14:37:44,616 - revenue_scraper - INFO - ✅ Baggy Vintage: 180 articoli venduti, €210402.00 ricavi (⏱️ 20.12s)
+2025-07-29 14:37:44,616 - revenue_scraper - INFO - ✅ Completato Baggy Vintage (thread)
+2025-07-29 14:37:45,129 - WDM - INFO - ====== WebDriver manager ======
+2025-07-29 14:37:46,779 - WDM - INFO - Get LATEST chromedriver version for google-chrome
+2025-07-29 14:37:47,021 - WDM - INFO - Get LATEST chromedriver version for google-chrome
+2025-07-29 14:37:47,236 - WDM - INFO - Driver [/Users/flavio.lombardi/.wdm/drivers/chromedriver/mac64/138.0.7204.168/chromedriver-mac-x64/chromedriver] found in cache
+2025-07-29 14:37:47,981 - revenue_scraper - INFO -   📊 Stima: 183 vendite (basato su 183 prezzi estratti)
+2025-07-29 14:37:47,982 - revenue_scraper - INFO - ✅ Vintageandkickz: 183 articoli venduti, €110730.00 ricavi (⏱️ 20.17s)
+2025-07-29 14:37:47,983 - revenue_scraper - INFO - ✅ Completato Vintageandkickz (thread)
+2025-07-29 14:37:48,301 - WDM - INFO - ====== WebDriver manager ======
+2025-07-29 14:37:48,967 - WDM - INFO - Get LATEST chromedriver version for google-chrome
+2025-07-29 14:37:49,121 - WDM - INFO - Get LATEST chromedriver version for google-chrome
+2025-07-29 14:37:49,255 - WDM - INFO - Driver [/Users/flavio.lombardi/.wdm/drivers/chromedriver/mac64/138.0.7204.168/chromedriver-mac-x64/chromedriver] found in cache
+2025-07-29 14:37:49,472 - revenue_scraper - INFO - 💰 Scraping ricavi profilo: Hugo (21940019)
+2025-07-29 14:37:52,712 - revenue_scraper - INFO - 💰 Scraping ricavi profilo: Plamexs (8642167)
+2025-07-29 14:38:00,065 - revenue_scraper - WARNING -   ⚠️ Toggle articoli venduti non trovato per Vintage & Modern
+2025-07-29 14:38:00,169 - revenue_scraper - WARNING -   ⚠️ Tab sold non trovato per Vintage & Modern, continuo con la pagina corrente
+2025-07-29 14:38:01,935 - revenue_scraper - WARNING -   ⚠️ Toggle articoli venduti non trovato per Hugo
+2025-07-29 14:38:02,043 - revenue_scraper - WARNING -   ⚠️ Tab sold non trovato per Hugo, continuo con la pagina corrente
+2025-07-29 14:38:02,539 - revenue_scraper - INFO -   📊 Stima: 138 vendite (basato su 138 prezzi estratti)
+2025-07-29 14:38:02,539 - revenue_scraper - INFO - ✅ Vintage & Modern: 138 articoli venduti, €42378.00 ricavi (⏱️ 18.01s)
+2025-07-29 14:38:02,540 - revenue_scraper - INFO - ✅ Completato Vintage & Modern (thread)
+2025-07-29 14:38:02,887 - WDM - INFO - ====== WebDriver manager ======
+2025-07-29 14:38:03,671 - WDM - INFO - Get LATEST chromedriver version for google-chrome
+2025-07-29 14:38:03,795 - WDM - INFO - Get LATEST chromedriver version for google-chrome
+2025-07-29 14:38:03,900 - WDM - INFO - Driver [/Users/flavio.lombardi/.wdm/drivers/chromedriver/mac64/138.0.7204.168/chromedriver-mac-x64/chromedriver] found in cache
+2025-07-29 14:38:04,141 - revenue_scraper - INFO -   📊 Stima: 102 vendite (basato su 102 prezzi estratti)
+2025-07-29 14:38:04,142 - revenue_scraper - INFO - ✅ Hugo: 102 articoli venduti, €39987.00 ricavi (⏱️ 14.67s)
+2025-07-29 14:38:04,142 - revenue_scraper - INFO - ✅ Completato Hugo (thread)
+2025-07-29 14:38:05,566 - revenue_scraper - INFO - 💰 Scraping ricavi profilo: The Brand Collector (4085582)
+2025-07-29 14:38:06,979 - revenue_scraper - WARNING -   ⚠️ Toggle articoli venduti non trovato per Plamexs
+2025-07-29 14:38:07,083 - revenue_scraper - WARNING -   ⚠️ Tab sold non trovato per Plamexs, continuo con la pagina corrente
+2025-07-29 14:38:09,598 - revenue_scraper - INFO -   📊 Stima: 183 vendite (basato su 183 prezzi estratti)
+2025-07-29 14:38:09,598 - revenue_scraper - INFO - ✅ Plamexs: 183 articoli venduti, €141621.00 ricavi (⏱️ 16.89s)
+2025-07-29 14:38:09,599 - revenue_scraper - INFO - ✅ Completato Plamexs (thread)
+2025-07-29 14:38:19,395 - revenue_scraper - WARNING -   ⚠️ Toggle articoli venduti non trovato per The Brand Collector
+2025-07-29 14:38:19,471 - revenue_scraper - WARNING -   ⚠️ Tab sold non trovato per The Brand Collector, continuo con la pagina corrente
+2025-07-29 14:38:21,255 - revenue_scraper - INFO -   📊 Stima: 183 vendite (basato su 183 prezzi estratti)
+2025-07-29 14:38:21,255 - revenue_scraper - INFO - ✅ The Brand Collector: 183 articoli venduti, €124692.00 ricavi (⏱️ 15.69s)
+2025-07-29 14:38:21,255 - revenue_scraper - INFO - ✅ Completato The Brand Collector (thread)
+2025-07-29 14:38:21,427 - root - INFO - 
+=== RISULTATI TEST REVENUE ===
+2025-07-29 14:38:21,427 - root - INFO - stephanie: 180 articoli venduti, €55326.00 ricavi
+2025-07-29 14:38:21,427 - root - INFO - Volodymyr: 210 articoli venduti, €74622.00 ricavi
+2025-07-29 14:38:21,427 - root - INFO - Rediscover: 180 articoli venduti, €81936.00 ricavi
+2025-07-29 14:38:21,427 - root - INFO - Mark: 180 articoli venduti, €60369.00 ricavi
+2025-07-29 14:38:21,427 - root - INFO - A Retro Tale: 180 articoli venduti, €159456.00 ricavi
+2025-07-29 14:38:21,428 - root - INFO - Lapsa: 360 articoli venduti, €368070.00 ricavi
+2025-07-29 14:38:21,428 - root - INFO - Clara: 183 articoli venduti, €247869.00 ricavi
+2025-07-29 14:38:21,428 - root - INFO - Baggy Vintage: 180 articoli venduti, €210402.00 ricavi
+2025-07-29 14:38:21,428 - root - INFO - Vintageandkickz: 183 articoli venduti, €110730.00 ricavi
+2025-07-29 14:38:21,428 - root - INFO - Vintage & Modern: 138 articoli venduti, €42378.00 ricavi
+2025-07-29 14:38:21,428 - root - INFO - Hugo: 102 articoli venduti, €39987.00 ricavi
+2025-07-29 14:38:21,428 - root - INFO - Plamexs: 183 articoli venduti, €141621.00 ricavi
+2025-07-29 14:38:21,428 - root - INFO - The Brand Collector: 183 articoli venduti, €124692.00 ricavi
+2025-07-29 14:38:21,428 - root - INFO - 
+TOTALI: 2442 articoli venduti, €1717458.00 ricavi totali
