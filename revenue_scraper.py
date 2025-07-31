@@ -29,14 +29,25 @@ class RevenueScraper:
     def setup_driver(self):
         """Configura driver Chrome"""
         chrome_options = Options()
-        chrome_options.add_argument("--headless")
+        # chrome_options.add_argument("--headless")  # Commentato per bypassare Cloudflare
         chrome_options.add_argument("--no-sandbox")
         chrome_options.add_argument("--disable-dev-shm-usage")
         chrome_options.add_argument("--window-size=1920,1080")
         
+        # Opzioni per bypassare Cloudflare
+        chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+        chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+        chrome_options.add_experimental_option('useAutomationExtension', False)
+        
+        # User-Agent realistico
+        chrome_options.add_argument("--user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36")
+        
         driver_path = ChromeDriverManager().install()
         service = Service(driver_path)
         self.driver = webdriver.Chrome(service=service, options=chrome_options)
+        
+        # Nascondi che è un bot
+        self.driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
     
     def _handle_cookie_banner(self):
         """Gestisce banner cookie"""
@@ -56,6 +67,49 @@ class RevenueScraper:
                         return
         except Exception:
             pass
+
+    def _handle_cloudflare_challenge(self, profile_name: str) -> bool:
+        """Gestisce la verifica Cloudflare"""
+        try:
+            logger.info(f"    🛡️ Gestione verifica Cloudflare per {profile_name}...")
+            
+            # Controlla se siamo nella pagina di verifica Cloudflare
+            page_title = self.driver.title
+            if "Ci siamo quasi" in page_title or "Just a moment" in page_title:
+                logger.info(f"      🔍 Pagina di verifica Cloudflare rilevata: {page_title}")
+                
+                # Aspetta che la verifica sia completata (massimo 30 secondi)
+                max_wait = 30
+                wait_time = 0
+                
+                while wait_time < max_wait:
+                    current_title = self.driver.title
+                    current_url = self.driver.current_url
+                    
+                    # Se il titolo cambia o l'URL cambia, la verifica è completata
+                    if current_title != page_title and "vestiairecollective.com" in current_url:
+                        logger.info(f"      ✅ Verifica Cloudflare completata: {current_title}")
+                        time.sleep(3)  # Aspetta che la pagina si carichi completamente
+                        return True
+                    
+                    # Se vediamo "Verifica riuscita", aspettiamo un po' di più
+                    if "Verifica riuscita" in self.driver.page_source:
+                        logger.info(f"      ⏳ Verifica in corso...")
+                        time.sleep(5)
+                        wait_time += 5
+                        continue
+                    
+                    time.sleep(2)
+                    wait_time += 2
+                
+                logger.warning(f"      ⚠️ Timeout verifica Cloudflare dopo {max_wait} secondi")
+                return False
+            
+            return True  # Non è una pagina di verifica
+            
+        except Exception as e:
+            logger.warning(f"      ⚠️ Errore gestione Cloudflare: {e}")
+            return False
     
     def _activate_sold_toggle(self, profile_name: str) -> bool:
         """Attiva toggle articoli venduti"""
@@ -365,6 +419,12 @@ class RevenueScraper:
             self.driver.save_screenshot(screenshot_path)
             logger.info(f"      📸 Screenshot salvato: {screenshot_path}")
             
+            # 7. Salva anche il codice HTML per analisi
+            html_path = f"debug_html_{profile_name.replace(' ', '_')}_{timestamp}.html"
+            with open(html_path, 'w', encoding='utf-8') as f:
+                f.write(self.driver.page_source)
+            logger.info(f"      📄 HTML salvato: {html_path}")
+            
         except Exception as e:
             logger.warning(f"    ⚠️ Errore analisi struttura: {e}")
 
@@ -428,6 +488,12 @@ class RevenueScraper:
             url = f"https://it.vestiairecollective.com/profile/{profile_id}/"
             self.driver.get(url)
             time.sleep(3)
+            
+            # Gestisci verifica Cloudflare se presente
+            cloudflare_success = self._handle_cloudflare_challenge(profile_name)
+            if not cloudflare_success:
+                logger.warning(f"    ⚠️ Verifica Cloudflare fallita per {profile_name}")
+                return False
             
             # Verifica che la pagina sia caricata
             page_title = self.driver.title
@@ -675,7 +741,41 @@ class RevenueScraper:
         try:
             logger.info(f"  🔄 Navigando alla sezione venduti per {profile_name}...")
             
-            # 1. Cerca e clicca sul tab "venduti" o "sold"
+            # 1. Prima cerca il toggle "Hide Sold Products" e cliccalo per mostrare gli articoli venduti
+            hide_sold_selectors = [
+                "//button[contains(text(), 'Hide Sold Products')]",
+                "//button[contains(text(), 'Nascondi prodotti venduti')]",
+                "//div[contains(text(), 'Hide Sold Products')]",
+                "//div[contains(text(), 'Nascondi prodotti venduti')]",
+                "//span[contains(text(), 'Hide Sold Products')]",
+                "//span[contains(text(), 'Nascondi prodotti venduti')]",
+                "//label[contains(text(), 'Hide Sold Products')]",
+                "//label[contains(text(), 'Nascondi prodotti venduti')]",
+                # Selettori per checkbox
+                "//input[@type='checkbox' and contains(@id, 'sold')]",
+                "//input[@type='checkbox' and contains(@name, 'sold')]",
+                "//input[@type='checkbox' and contains(@class, 'sold')]"
+            ]
+            
+            for selector in hide_sold_selectors:
+                elements = self.driver.find_elements(By.XPATH, selector)
+                for element in elements:
+                    try:
+                        if element.is_displayed() and element.is_enabled():
+                            text = element.text.strip() if element.text else "checkbox"
+                            logger.info(f"    Cliccando toggle 'Hide Sold Products': '{text}'")
+                            element.click()
+                            time.sleep(3)
+                            
+                            # Verifica se ora ci sono prezzi
+                            price_elements = self.driver.find_elements(By.XPATH, "//*[contains(text(), '€')]")
+                            if price_elements:
+                                logger.info(f"    ✅ Prezzi trovati dopo toggle: {len(price_elements)} elementi")
+                                return True
+                    except Exception as e:
+                        continue
+            
+            # 2. Se non trova il toggle, cerca tab o link per articoli venduti
             sold_tab_selectors = [
                 # Selettori specifici per Vestiaire Collective
                 "//button[contains(text(), 'venduti')]",
@@ -693,11 +793,6 @@ class RevenueScraper:
                 "//button[contains(text(), '7306')]",
                 "//div[contains(text(), '7306')]",
                 "//span[contains(text(), '7306')]",
-                # Selettori per filtri
-                "//button[contains(text(), 'Hide Sold Products')]",
-                "//button[contains(text(), 'Nascondi prodotti venduti')]",
-                "//div[contains(text(), 'Hide Sold Products')]",
-                "//div[contains(text(), 'Nascondi prodotti venduti')]",
                 # Selettori per tab
                 "//a[contains(text(), 'Sold items')]",
                 "//a[contains(text(), 'Articoli venduti')]",
@@ -764,12 +859,98 @@ class RevenueScraper:
                     logger.info(f"    Trovati {len(price_check)} elementi con € dopo scroll {i+1}")
                     return True
             
+            # 3. Se non trova nulla, analizza la struttura della pagina per trovare elementi cliccabili
+            logger.info(f"    🔍 Analisi struttura pagina per trovare elementi venduti...")
+            self._analyze_page_for_clickable_elements(profile_name)
+            
             logger.warning(f"  ⚠️ Non riuscito a navigare alla sezione venduti per {profile_name}")
             return False
             
         except Exception as e:
             logger.warning(f"  ⚠️ Errore navigazione sezione venduti per {profile_name}: {e}")
             return False
+
+    def _analyze_page_for_clickable_elements(self, profile_name: str):
+        """Analizza la pagina per trovare elementi cliccabili relativi agli articoli venduti"""
+        try:
+            logger.info(f"      🔍 Analisi elementi cliccabili per {profile_name}...")
+            
+            # Cerca tutti gli elementi cliccabili
+            clickable_selectors = [
+                "//button",
+                "//a",
+                "//div[@onclick]",
+                "//span[@onclick]",
+                "//input[@type='checkbox']",
+                "//input[@type='radio']",
+                "//label"
+            ]
+            
+            all_clickable = []
+            for selector in clickable_selectors:
+                elements = self.driver.find_elements(By.XPATH, selector)
+                all_clickable.extend(elements)
+            
+            logger.info(f"        Elementi cliccabili totali: {len(all_clickable)}")
+            
+            # Filtra elementi che potrebbero essere relativi a "sold" o "venduti"
+            sold_related = []
+            for element in all_clickable:
+                try:
+                    text = element.text.strip().lower()
+                    tag = element.tag_name
+                    class_name = element.get_attribute("class") or ""
+                    id_name = element.get_attribute("id") or ""
+                    
+                    # Cerca pattern relativi a venduti
+                    sold_patterns = ['sold', 'venduti', 'venduto', '37', '7306', 'hide', 'nascondi']
+                    
+                    if any(pattern in text for pattern in sold_patterns) or \
+                       any(pattern in class_name.lower() for pattern in sold_patterns) or \
+                       any(pattern in id_name.lower() for pattern in sold_patterns):
+                        
+                        sold_related.append({
+                            'element': element,
+                            'text': text,
+                            'tag': tag,
+                            'class': class_name,
+                            'id': id_name
+                        })
+                        
+                except Exception as e:
+                    continue
+            
+            logger.info(f"        Elementi relativi a venduti: {len(sold_related)}")
+            
+            # Mostra i primi 10 elementi trovati
+            for i, item in enumerate(sold_related[:10]):
+                logger.info(f"          Elemento {i+1}: '{item['text']}' (tag: {item['tag']}, class: {item['class']}, id: {item['id']})")
+            
+            # Prova a cliccare sui primi elementi trovati
+            for i, item in enumerate(sold_related[:5]):
+                try:
+                    element = item['element']
+                    if element.is_displayed() and element.is_enabled():
+                        logger.info(f"        Tentativo click su elemento {i+1}: '{item['text']}'")
+                        element.click()
+                        time.sleep(3)
+                        
+                        # Verifica se ora ci sono prezzi
+                        price_elements = self.driver.find_elements(By.XPATH, "//*[contains(text(), '€')]")
+                        if price_elements:
+                            logger.info(f"        ✅ Prezzi trovati dopo click su elemento {i+1}: {len(price_elements)} elementi")
+                            return True
+                        
+                        # Se non funziona, torna indietro
+                        self.driver.back()
+                        time.sleep(2)
+                        
+                except Exception as e:
+                    logger.warning(f"        Errore click su elemento {i+1}: {e}")
+                    continue
+            
+        except Exception as e:
+            logger.warning(f"      ⚠️ Errore analisi elementi cliccabili: {e}")
 
     def _analyze_vestiaire_structure(self, profile_name: str) -> int:
         """Analizza la struttura specifica di Vestiaire Collective per trovare vendite reali"""

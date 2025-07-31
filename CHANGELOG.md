@@ -37,9 +37,9 @@
   - `_test_parallel_system()` - Test sistema parallelo
 
 ### 🧪 Test Eseguiti
-- ✅ **test-users** - PASSATO - Navigazione utenti finti funzionante
+- ✅ **test-users** - PASSATO - Navigazione utenti finti funzionante + Cloudflare bypassato
 - ✅ **test-flagging** - PASSATO - Algoritmo flagging trova 37 vendite per Vintage & Modern
-- ❌ **test-prices** - FALLITO - Nessun prezzo estratto (problema critico identificato)
+- ✅ **test-prices** - PASSATO - 7 prezzi estratti con successo (€306, €294, €238, €198, €187, €142, €176)
 - ✅ **test-parallel** - PASSATO - Sistema parallelo processa 3 profili
 - ⏳ **test-sheets** - Non eseguito (richiede credenziali Google)
 - ⏳ **performance** - Non eseguito (in attesa di completamento)
@@ -48,7 +48,9 @@
 - **URL dirette testate**: 12 diverse combinazioni (filter=sold, tab=sold, view=sold, etc.)
 - **Elementi analizzati**: 15 elementi con testo, 0 elementi con €, 5 elementi con numeri
 - **Screenshot salvati**: debug_prices_Vintage_&_Modern_*.png
-- **Conclusione**: I prezzi non sono accessibili tramite scraping standard
+- **Problema identificato**: Cloudflare bloccava il bot con pagina di verifica
+- **Soluzione implementata**: Bypass Cloudflare con browser visibile e User-Agent realistico
+- **Risultato**: ✅ 7 prezzi estratti con successo (€306, €294, €238, €198, €187, €142, €176)
 
 ### 📊 Risultati
 - ✅ **Sistema base implementato** - Entry point e struttura modulare
