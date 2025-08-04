@@ -1211,39 +1211,32 @@ class GoogleSheetsUpdater:
                             row.append(0)
                             continue
                         
-                        # Prendi il valore dalla seconda colonna (diff vendite mensile)
-                        # Se la colonna non esiste, calcola la somma delle diff vendite
-                        if len(profile_row) > 1 and profile_row[1] != "":
-                            try:
-                                total = int(str(profile_row[1]).replace("'", "").replace(" ", "").strip())
-                                row.append(total)
-                                profile_total += total
-                            except (ValueError, TypeError):
-                                row.append(0)
-                        else:
-                            # Calcola la somma delle diff vendite se la colonna non esiste
-                            # Trova tutte le colonne "diff vendite" dalla riga 2
-                            diff_vendite_columns = []
-                            if len(values) > 1:
-                                header_row = values[1]  # Riga 2 contiene le intestazioni delle colonne
-                                for col_idx, header in enumerate(header_row):
-                                    if header and "diff vendite" in str(header).lower():
-                                        diff_vendite_columns.append(col_idx)
-                            
-                            total_diff_vendite = 0
-                            for col_idx in diff_vendite_columns:
-                                if col_idx < len(profile_row):
-                                    try:
-                                        cell_value = profile_row[col_idx]
-                                        if cell_value and str(cell_value).strip():
-                                            clean_val = str(cell_value).replace("'", "").replace(" ", "").strip()
-                                            if clean_val:
-                                                total_diff_vendite += int(clean_val)
-                                    except (ValueError, TypeError):
-                                        pass
-                            
-                            row.append(total_diff_vendite)
-                            profile_total += total_diff_vendite
+                        # Calcola sempre la somma delle diff vendite giornaliere
+                        # Trova tutte le colonne "diff vendite" dalla riga 2
+                        diff_vendite_columns = []
+                        if len(values) > 1:
+                            header_row = values[1]  # Riga 2 contiene le intestazioni delle colonne
+                            for col_idx, header in enumerate(header_row):
+                                if header and "diff vendite" in str(header).lower():
+                                    diff_vendite_columns.append(col_idx)
+                        
+                        logger.info(f"  {profile} in {month}: trovate {len(diff_vendite_columns)} colonne diff vendite")
+                        
+                        total_diff_vendite = 0
+                        for col_idx in diff_vendite_columns:
+                            if col_idx < len(profile_row):
+                                try:
+                                    cell_value = profile_row[col_idx]
+                                    if cell_value and str(cell_value).strip():
+                                        clean_val = str(cell_value).replace("'", "").replace(" ", "").strip()
+                                        if clean_val:
+                                            total_diff_vendite += int(clean_val)
+                                            logger.info(f"    Colonna {col_idx}: {clean_val}")
+                                except (ValueError, TypeError):
+                                    pass
+                        
+                        row.append(total_diff_vendite)
+                        profile_total += total_diff_vendite
                             
                     except Exception as e:
                         logger.error(f"Errore nel calcolo per {profile} in {month}: {e}")
@@ -1353,7 +1346,7 @@ class GoogleSheetsUpdater:
                     },
                     "cell": {
                         "userEnteredFormat": {
-                            "backgroundColor": {"red": 0.8, "green": 0.2, "blue": 0.2},
+                            "backgroundColor": {"red": 0.9, "green": 0.4, "blue": 0.4},  # Rosso più tenue
                             "textFormat": {
                                 "bold": True,
                                 "foregroundColor": {"red": 1, "green": 1, "blue": 1}
@@ -1376,7 +1369,7 @@ class GoogleSheetsUpdater:
                     },
                     "cell": {
                         "userEnteredFormat": {
-                            "backgroundColor": {"red": 0.2, "green": 0.8, "blue": 0.2},
+                            "backgroundColor": {"red": 0.4, "green": 0.9, "blue": 0.4},  # Verde più tenue
                             "textFormat": {
                                 "bold": True,
                                 "foregroundColor": {"red": 0, "green": 0, "blue": 0}

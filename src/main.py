@@ -1142,6 +1142,93 @@ def update_overview():
         traceback.print_exc()
         return False
 
+def test_overview():
+    """Testa la lettura dei dati per la tab Overview."""
+    try:
+        logger.info("🧪 TEST LETTURA DATI OVERVIEW")
+        logger.info("=" * 50)
+        
+        credentials_json = os.environ.get('GOOGLE_SHEETS_CREDENTIALS')
+        if not credentials_json:
+            logger.error("❌ Credenziali non trovate nelle variabili d'ambiente")
+            return False
+        
+        updater = GoogleSheetsUpdater(credentials_json)
+        
+        # Test lettura dati July
+        logger.info("📊 Test lettura dati July...")
+        try:
+            result = updater.service.spreadsheets().values().get(
+                spreadsheetId=updater.spreadsheet_id,
+                range="july!A:ZZ"
+            ).execute()
+            values = result.get('values', [])
+            logger.info(f"  Righe trovate in july: {len(values)}")
+            
+            if len(values) > 1:
+                header_row = values[1]  # Riga 2
+                logger.info(f"  Header riga 2: {header_row[:10]}...")  # Primi 10 elementi
+                
+                # Trova colonne diff vendite
+                diff_vendite_columns = []
+                for col_idx, header in enumerate(header_row):
+                    if header and "diff vendite" in str(header).lower():
+                        diff_vendite_columns.append(col_idx)
+                
+                logger.info(f"  Colonne diff vendite trovate: {diff_vendite_columns}")
+                
+                # Test primo profilo
+                if len(values) > 2:
+                    first_profile = values[2]
+                    logger.info(f"  Primo profilo: {first_profile[0] if first_profile else 'N/A'}")
+                    if first_profile:
+                        for col_idx in diff_vendite_columns[:5]:  # Primi 5 valori
+                            if col_idx < len(first_profile):
+                                logger.info(f"    Colonna {col_idx}: {first_profile[col_idx]}")
+        except Exception as e:
+            logger.error(f"  Errore lettura july: {e}")
+        
+        # Test lettura dati August
+        logger.info("📊 Test lettura dati August...")
+        try:
+            result = updater.service.spreadsheets().values().get(
+                spreadsheetId=updater.spreadsheet_id,
+                range="august!A:ZZ"
+            ).execute()
+            values = result.get('values', [])
+            logger.info(f"  Righe trovate in august: {len(values)}")
+            
+            if len(values) > 1:
+                header_row = values[1]  # Riga 2
+                logger.info(f"  Header riga 2: {header_row[:10]}...")  # Primi 10 elementi
+                
+                # Trova colonne diff vendite
+                diff_vendite_columns = []
+                for col_idx, header in enumerate(header_row):
+                    if header and "diff vendite" in str(header).lower():
+                        diff_vendite_columns.append(col_idx)
+                
+                logger.info(f"  Colonne diff vendite trovate: {diff_vendite_columns}")
+                
+                # Test primo profilo
+                if len(values) > 2:
+                    first_profile = values[2]
+                    logger.info(f"  Primo profilo: {first_profile[0] if first_profile else 'N/A'}")
+                    if first_profile:
+                        for col_idx in diff_vendite_columns[:5]:  # Primi 5 valori
+                            if col_idx < len(first_profile):
+                                logger.info(f"    Colonna {col_idx}: {first_profile[col_idx]}")
+        except Exception as e:
+            logger.error(f"  Errore lettura august: {e}")
+        
+        logger.info("✅ Test completato!")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Errore nel test Overview: {e}")
+        traceback.print_exc()
+        return False
+
 
 if __name__ == "__main__":
     # Controlla gli argomenti della riga di comando
@@ -1179,6 +1266,9 @@ if __name__ == "__main__":
             fix_august_1st_totals()
         elif command == "update-overview":
             update_overview()
+        elif command == "test-overview":
+            success = test_overview()
+            sys.exit(0 if success else 1)
 
         elif command == "debug-scraping":
             debug_scraping_issue()
