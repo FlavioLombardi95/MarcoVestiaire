@@ -544,9 +544,20 @@ class GoogleSheetsUpdater:
                 return {}
             
             # Calcola colonne per l'ultimo giorno del mese precedente
+            # Struttura: Profilo, Diff Vendite, URL, [dati giornalieri]
+            # I dati giornalieri iniziano dalla colonna D (indice 3)
             base_col = 3 + (last_day-1)*4
             articoli_col = base_col
             vendite_col = base_col+1
+            
+            # Verifica se le colonne sono ragionevoli
+            if base_col > 50:  # Se la colonna è troppo alta, potrebbe essere un errore
+                logger.warning(f"Colonna {base_col} per il giorno {last_day} sembra troppo alta!")
+                logger.warning("Verificare la struttura della tab {prev_month_name}")
+                # Prova a calcolare in modo diverso
+                logger.info("Tentativo di calcolo alternativo...")
+                # Se il calcolo è sbagliato, prova a cercare le colonne dinamicamente
+                return self.find_last_day_data_dynamically(prev_month_name, last_day, values)
             
             logger.info(f"Ultimo giorno {last_day}: colonne calcolate - articoli={articoli_col}, vendite={vendite_col}")
             logger.info(f"Base colonna: {base_col} (giorno {last_day} del mese {prev_month_name})")
@@ -585,6 +596,78 @@ class GoogleSheetsUpdater:
             
         except Exception as e:
             logger.error(f"Errore nel recupero dati mese precedente: {e}")
+            return {}
+
+    def find_last_day_data_dynamically(self, month_name: str, last_day: int, values: list) -> Dict[str, Dict]:
+        """Trova i dati dell'ultimo giorno cercando dinamicamente nelle intestazioni."""
+        try:
+            logger.info(f"Ricerca dinamica dei dati del giorno {last_day} in {month_name}")
+            
+            if not values or len(values) < 2:
+                logger.error("Dati insufficienti per ricerca dinamica")
+                return {}
+            
+            # Cerca nelle intestazioni della riga 1
+            header_row = values[0]
+            logger.info(f"Header row: {header_row}")
+            
+            # Cerca la colonna che contiene il giorno
+            target_day_header = f"{last_day} {month_name}"
+            articoli_col = None
+            vendite_col = None
+            
+            for col_idx, header in enumerate(header_row):
+                if header and str(header).strip() == target_day_header:
+                    logger.info(f"Trovata intestazione '{target_day_header}' alla colonna {col_idx}")
+                    # Le colonne sono: articoli, vendite, diff stock, diff vendite
+                    articoli_col = col_idx
+                    vendite_col = col_idx + 1
+                    break
+            
+            if articoli_col is None:
+                logger.error(f"Intestazione '{target_day_header}' non trovata!")
+                logger.info("Intestazioni disponibili:")
+                for col_idx, header in enumerate(header_row):
+                    if header and str(header).strip():
+                        logger.info(f"  Colonna {col_idx}: '{header}'")
+                return {}
+            
+            logger.info(f"Colonne trovate: articoli={articoli_col}, vendite={vendite_col}")
+            
+            # Estrai i dati per ogni profilo
+            previous_data = {}
+            for row_idx in range(2, len(values)):
+                if values[row_idx] and values[row_idx][0] and values[row_idx][0] != "Totali":
+                    profile_name = values[row_idx][0]
+                    
+                    articoli = None
+                    vendite = None
+                    
+                    if articoli_col < len(values[row_idx]) and values[row_idx][articoli_col]:
+                        try:
+                            clean_val = str(values[row_idx][articoli_col]).replace("'", "").replace(" ", "").strip()
+                            articoli = int(clean_val) if clean_val else None
+                        except (ValueError, TypeError):
+                            articoli = None
+                    
+                    if vendite_col < len(values[row_idx]) and values[row_idx][vendite_col]:
+                        try:
+                            clean_val = str(values[row_idx][vendite_col]).replace("'", "").replace(" ", "").strip()
+                            vendite = int(clean_val) if clean_val else None
+                        except (ValueError, TypeError):
+                            vendite = None
+                    
+                    if articoli is not None or vendite is not None:
+                        previous_data[profile_name] = {
+                            'articles': articoli,
+                            'sales': vendite
+                        }
+                        logger.info(f"Dati dinamici per {profile_name}: articoli={articoli}, vendite={vendite}")
+            
+            return previous_data
+            
+        except Exception as e:
+            logger.error(f"Errore nella ricerca dinamica: {e}")
             return {}
 
     def recalculate_all_month_diffs(self, month_name: str, year: int, month: int):
