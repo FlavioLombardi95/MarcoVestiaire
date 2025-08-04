@@ -1169,22 +1169,20 @@ def test_overview():
                 header_row = values[1]  # Riga 2
                 logger.info(f"  Header riga 2: {header_row[:10]}...")  # Primi 10 elementi
                 
-                # Trova colonne diff vendite
-                diff_vendite_columns = []
-                for col_idx, header in enumerate(header_row):
-                    if header and "diff vendite" in str(header).lower():
-                        diff_vendite_columns.append(col_idx)
-                
-                logger.info(f"  Colonne diff vendite trovate: {diff_vendite_columns}")
+                # Test colonna B (Diff Vendite [Mese])
+                logger.info(f"  Colonna B (Diff Vendite [Mese]): {header_row[1] if len(header_row) > 1 else 'N/A'}")
                 
                 # Test primo profilo
                 if len(values) > 2:
                     first_profile = values[2]
                     logger.info(f"  Primo profilo: {first_profile[0] if first_profile else 'N/A'}")
-                    if first_profile:
-                        for col_idx in diff_vendite_columns[:5]:  # Primi 5 valori
-                            if col_idx < len(first_profile):
-                                logger.info(f"    Colonna {col_idx}: {first_profile[col_idx]}")
+                    if first_profile and len(first_profile) > 1:
+                        logger.info(f"    Colonna B valore: {first_profile[1]}")
+                        try:
+                            total = int(str(first_profile[1]).replace("'", "").strip())
+                            logger.info(f"    Totale convertito: {total}")
+                        except (ValueError, TypeError):
+                            logger.warning(f"    Valore non numerico: {first_profile[1]}")
         except Exception as e:
             logger.error(f"  Errore lettura july: {e}")
         
@@ -1202,22 +1200,20 @@ def test_overview():
                 header_row = values[1]  # Riga 2
                 logger.info(f"  Header riga 2: {header_row[:10]}...")  # Primi 10 elementi
                 
-                # Trova colonne diff vendite
-                diff_vendite_columns = []
-                for col_idx, header in enumerate(header_row):
-                    if header and "diff vendite" in str(header).lower():
-                        diff_vendite_columns.append(col_idx)
-                
-                logger.info(f"  Colonne diff vendite trovate: {diff_vendite_columns}")
+                # Test colonna B (Diff Vendite [Mese])
+                logger.info(f"  Colonna B (Diff Vendite [Mese]): {header_row[1] if len(header_row) > 1 else 'N/A'}")
                 
                 # Test primo profilo
                 if len(values) > 2:
                     first_profile = values[2]
                     logger.info(f"  Primo profilo: {first_profile[0] if first_profile else 'N/A'}")
-                    if first_profile:
-                        for col_idx in diff_vendite_columns[:5]:  # Primi 5 valori
-                            if col_idx < len(first_profile):
-                                logger.info(f"    Colonna {col_idx}: {first_profile[col_idx]}")
+                    if first_profile and len(first_profile) > 1:
+                        logger.info(f"    Colonna B valore: {first_profile[1]}")
+                        try:
+                            total = int(str(first_profile[1]).replace("'", "").strip())
+                            logger.info(f"    Totale convertito: {total}")
+                        except (ValueError, TypeError):
+                            logger.warning(f"    Valore non numerico: {first_profile[1]}")
         except Exception as e:
             logger.error(f"  Errore lettura august: {e}")
         

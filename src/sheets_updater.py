@@ -1227,29 +1227,19 @@ class GoogleSheetsUpdater:
                             row.append(0)
                             continue
                         
-                        # Calcola sempre la somma delle diff vendite giornaliere
-                        # Trova tutte le colonne "diff vendite" dalla riga 2
-                        diff_vendite_columns = []
-                        if len(values) > 1:
-                            header_row = values[1]  # Riga 2 contiene le intestazioni delle colonne
-                            for col_idx, header in enumerate(header_row):
-                                if header and "diff vendite" in str(header).lower():
-                                    diff_vendite_columns.append(col_idx)
-                        
-                        total_diff_vendite = 0
-                        for col_idx in diff_vendite_columns:
-                            if col_idx < len(profile_row):
-                                try:
-                                    cell_value = profile_row[col_idx]
-                                    if cell_value and str(cell_value).strip():
-                                        clean_val = str(cell_value).replace("'", "").replace(" ", "").strip()
-                                        if clean_val:
-                                            total_diff_vendite += int(clean_val)
-                                except (ValueError, TypeError):
-                                    pass
-                        
-                        row.append(total_diff_vendite)
-                        profile_total += total_diff_vendite
+                        # Prendi direttamente il totale dalla colonna B (Diff Vendite [Mese])
+                        if len(profile_row) > 1 and profile_row[1] != "":
+                            try:
+                                total = int(str(profile_row[1]).replace("'", "").replace(" ", "").strip())
+                                row.append(total)
+                                profile_total += total
+                                logger.info(f"  {profile} in {month}: totale = {total} (colonna B)")
+                            except (ValueError, TypeError):
+                                logger.warning(f"  {profile} in {month}: valore non numerico in colonna B: {profile_row[1]}")
+                                row.append(0)
+                        else:
+                            logger.warning(f"  {profile} in {month}: colonna B vuota o mancante")
+                            row.append(0)
                             
                     except Exception as e:
                         logger.error(f"Errore nel calcolo per {profile} in {month}: {e}")
