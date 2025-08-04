@@ -519,6 +519,7 @@ class GoogleSheetsUpdater:
                 prev_year = year
             
             prev_month_name = calendar.month_name[prev_month].lower()
+            logger.info(f"Recupero dati del mese precedente: {prev_month_name} {prev_year}")
             
             # Ottieni l'ultimo giorno del mese precedente
             last_day = calendar.monthrange(prev_year, prev_month)[1]
@@ -532,6 +533,12 @@ class GoogleSheetsUpdater:
             ).execute()
             values = result.get('values', [])
             
+            logger.info(f"Tab {prev_month_name}: trovate {len(values)} righe")
+            if len(values) > 0:
+                logger.info(f"Prima riga: {values[0]}")
+            if len(values) > 1:
+                logger.info(f"Seconda riga: {values[1]}")
+            
             if not values or len(values) < 3:
                 logger.info(f"Tab {prev_month_name} non ha dati sufficienti")
                 return {}
@@ -540,6 +547,9 @@ class GoogleSheetsUpdater:
             base_col = 3 + (last_day-1)*4
             articoli_col = base_col
             vendite_col = base_col+1
+            
+            logger.info(f"Ultimo giorno {last_day}: colonne calcolate - articoli={articoli_col}, vendite={vendite_col}")
+            logger.info(f"Base colonna: {base_col} (giorno {last_day} del mese {prev_month_name})")
             
             # Estrai i dati per ogni profilo
             previous_data = {}

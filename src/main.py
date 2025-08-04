@@ -164,6 +164,8 @@ def main():
                     logger.error("❌ Uso: python main.py recalculate-diffs <month_name> <year>")
                     logger.error("   Esempio: python main.py recalculate-diffs august 2025")
                     return False
+            elif command == "debug-july-data":
+                return debug_july_data()
             elif command == "help":
                 print("🚀 VESTIAIRE MONITOR - Comandi disponibili:")
                 print("  python main.py                  - Esecuzione normale")
@@ -172,6 +174,7 @@ def main():
                 print("  python main.py debug-totali     - Debug calcoli totali")
                 print("  python main.py test-credentials - Test credenziali Google Sheets")
                 print("  python main.py recalculate-diffs <month> <year> - Ricalcola differenze per un mese")
+                print("  python main.py debug-july-data   - Debug dati del 31 luglio")
                 print("  python main.py help             - Mostra questo help")
                 return True
             else:
@@ -849,6 +852,46 @@ def recalculate_month_diffs(month_name: str, year: int):
         return False
 
 
+def debug_july_data():
+    """Debug per verificare i dati del 31 luglio."""
+    try:
+        logger.info("🔍 DEBUG DATI DEL 31 LUGLIO")
+        logger.info("=" * 50)
+        
+        # Ottieni credenziali
+        credentials_json = os.environ.get('GOOGLE_SHEETS_CREDENTIALS')
+        if not credentials_json:
+            logger.error("❌ Credenziali non trovate nelle variabili d'ambiente")
+            return False
+        
+        # Inizializza updater
+        updater = GoogleSheetsUpdater(credentials_json)
+        
+        # Test recupero dati del 31 luglio
+        logger.info("Test recupero dati del 31 luglio 2024...")
+        july_data = updater.get_previous_month_last_day_data(2025, 8)  # agosto 2025 -> luglio 2024
+        
+        logger.info(f"Dati recuperati per {len(july_data)} profili:")
+        for profile_name, data in july_data.items():
+            logger.info(f"  {profile_name}: articoli={data.get('articles')}, vendite={data.get('sales')}")
+        
+        if not july_data:
+            logger.error("❌ Nessun dato del 31 luglio trovato!")
+            logger.info("💡 Possibili cause:")
+            logger.info("   - Tab 'july' non esiste")
+            logger.info("   - Dati del 31 luglio non presenti")
+            logger.info("   - Struttura colonne diversa da quella attesa")
+        else:
+            logger.info("✅ Dati del 31 luglio recuperati con successo!")
+            
+        return len(july_data) > 0
+        
+    except Exception as e:
+        logger.error(f"Errore nel debug dati luglio: {e}")
+        traceback.print_exc()
+        return False
+
+
 if __name__ == "__main__":
     # Controlla gli argomenti della riga di comando
     if len(sys.argv) > 1:
@@ -877,6 +920,8 @@ if __name__ == "__main__":
             else:
                 print("❌ Uso: python main.py recalculate-diffs <month_name> <year>")
                 print("   Esempio: python main.py recalculate-diffs august 2025")
+        elif command == "debug-july-data":
+            debug_july_data()
 
         elif command == "debug-scraping":
             debug_scraping_issue()
