@@ -166,6 +166,8 @@ def main():
                     return False
             elif command == "debug-july-data":
                 return debug_july_data()
+            elif command == "fix-august-1st":
+                return fix_august_1st_diffs()
             elif command == "help":
                 print("🚀 VESTIAIRE MONITOR - Comandi disponibili:")
                 print("  python main.py                  - Esecuzione normale")
@@ -175,6 +177,7 @@ def main():
                 print("  python main.py test-credentials - Test credenziali Google Sheets")
                 print("  python main.py recalculate-diffs <month> <year> - Ricalcola differenze per un mese")
                 print("  python main.py debug-july-data   - Debug dati del 31 luglio")
+                print("  python main.py fix-august-1st    - Corregge differenze del 1° agosto")
                 print("  python main.py help             - Mostra questo help")
                 return True
             else:
@@ -892,6 +895,125 @@ def debug_july_data():
         return False
 
 
+def fix_august_1st_diffs():
+    """Corregge specificamente le differenze del 1° agosto usando i dati del 31 luglio."""
+    try:
+        logger.info("🔧 CORREZIONE DIFFERENZE 1° AGOSTO")
+        logger.info("=" * 50)
+        
+        # Ottieni credenziali
+        credentials_json = os.environ.get('GOOGLE_SHEETS_CREDENTIALS')
+        if not credentials_json:
+            logger.error("❌ Credenziali non trovate nelle variabili d'ambiente")
+            return False
+        
+        # Inizializza updater
+        updater = GoogleSheetsUpdater(credentials_json)
+        
+        # Recupera dati del 31 luglio
+        logger.info("Recupero dati del 31 luglio 2024...")
+        july_data = updater.get_previous_month_last_day_data(2025, 8)  # agosto 2025 -> luglio 2024
+        
+        if not july_data:
+            logger.error("❌ Nessun dato del 31 luglio trovato!")
+            return False
+        
+        logger.info(f"✅ Dati del 31 luglio recuperati per {len(july_data)} profili")
+        
+        # Leggi dati attuali della tab august
+        result = updater.service.spreadsheets().values().get(
+            spreadsheetId=updater.spreadsheet_id,
+            range="august!A:ZZ"
+        ).execute()
+        values = result.get('values', [])
+        
+        if not values or len(values) < 3:
+            logger.error("❌ Tab august non ha dati sufficienti")
+            return False
+        
+        # Trova le colonne del 1° agosto
+        # Colonna D (indice 3) = articoli 1 agosto
+        # Colonna E (indice 4) = vendite 1 agosto  
+        # Colonna F (indice 5) = diff stock 1 agosto
+        # Colonna G (indice 6) = diff vendite 1 agosto
+        
+        articoli_col_1aug = 3
+        vendite_col_1aug = 4
+        diff_stock_col_1aug = 5
+        diff_vendite_col_1aug = 6
+        
+        logger.info(f"Colonne 1° agosto: articoli={articoli_col_1aug}, vendite={vendite_col_1aug}")
+        
+        # Per ogni profilo, calcola le differenze del 1° agosto
+        updated_rows = 0
+        for row_idx in range(2, len(values)):
+            if values[row_idx] and values[row_idx][0] and values[row_idx][0] != "Totali":
+                profile_name = values[row_idx][0]
+                
+                if profile_name in july_data:
+                    # Leggi dati del 1° agosto
+                    current_articoli = None
+                    current_vendite = None
+                    
+                    if articoli_col_1aug < len(values[row_idx]) and values[row_idx][articoli_col_1aug]:
+                        try:
+                            clean_val = str(values[row_idx][articoli_col_1aug]).replace("'", "").replace(" ", "").strip()
+                            current_articoli = int(clean_val) if clean_val else None
+                        except (ValueError, TypeError):
+                            current_articoli = None
+                    
+                    if vendite_col_1aug < len(values[row_idx]) and values[row_idx][vendite_col_1aug]:
+                        try:
+                            clean_val = str(values[row_idx][vendite_col_1aug]).replace("'", "").replace(" ", "").strip()
+                            current_vendite = int(clean_val) if clean_val else None
+                        except (ValueError, TypeError):
+                            current_vendite = None
+                    
+                    # Dati del 31 luglio
+                    july_articoli = july_data[profile_name].get('articles')
+                    july_vendite = july_data[profile_name].get('sales')
+                    
+                    logger.info(f"Profilo {profile_name}:")
+                    logger.info(f"  31 luglio: articoli={july_articoli}, vendite={july_vendite}")
+                    logger.info(f"  1 agosto: articoli={current_articoli}, vendite={current_vendite}")
+                    
+                    # Calcola differenze
+                    if current_articoli is not None and july_articoli is not None:
+                        diff_stock = current_articoli - july_articoli
+                        values[row_idx][diff_stock_col_1aug] = diff_stock
+                        logger.info(f"  diff_stock = {current_articoli} - {july_articoli} = {diff_stock}")
+                    
+                    if current_vendite is not None and july_vendite is not None:
+                        diff_vendite = current_vendite - july_vendite
+                        values[row_idx][diff_vendite_col_1aug] = diff_vendite
+                        logger.info(f"  diff_vendite = {current_vendite} - {july_vendite} = {diff_vendite}")
+                    
+                    updated_rows += 1
+                else:
+                    logger.warning(f"Profilo {profile_name} non trovato nei dati del 31 luglio")
+        
+        # Scrivi i dati aggiornati
+        updater.service.spreadsheets().values().update(
+            spreadsheetId=updater.spreadsheet_id,
+            range="august!A1",
+            valueInputOption='USER_ENTERED',
+            body={'values': values}
+        ).execute()
+        
+        logger.info(f"✅ Aggiornate le differenze del 1° agosto per {updated_rows} profili")
+        
+        # Aggiorna i totali mensili
+        updater.update_monthly_diff_vendite_totals("august", 2025)
+        
+        logger.info("✅ Correzione 1° agosto completata!")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Errore nella correzione 1° agosto: {e}")
+        traceback.print_exc()
+        return False
+
+
 if __name__ == "__main__":
     # Controlla gli argomenti della riga di comando
     if len(sys.argv) > 1:
@@ -922,6 +1044,8 @@ if __name__ == "__main__":
                 print("   Esempio: python main.py recalculate-diffs august 2025")
         elif command == "debug-july-data":
             debug_july_data()
+        elif command == "fix-august-1st":
+            fix_august_1st_diffs()
 
         elif command == "debug-scraping":
             debug_scraping_issue()
