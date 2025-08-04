@@ -1258,14 +1258,14 @@ def main():
             "url": "https://it.vestiairecollective.com/profile/2039815/",
             "articles": 573,
             "sales": 7198,
-            "timestamp": "2024-01-15 10:00:00"
+            "timestamp": "2025-01-15 10:00:00"
         },
         {
             "name": "Volodymyr", 
             "url": "https://it.vestiairecollective.com/profile/5924329/",
             "articles": 2315,
             "sales": 5558,
-            "timestamp": "2024-01-15 10:00:00"
+            "timestamp": "2025-01-15 10:00:00"
         }
     ]
     

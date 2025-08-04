@@ -162,7 +162,7 @@ def main():
                     return recalculate_month_diffs(month_name, year)
                 else:
                     logger.error("❌ Uso: python main.py recalculate-diffs <month_name> <year>")
-                    logger.error("   Esempio: python main.py recalculate-diffs august 2024")
+                    logger.error("   Esempio: python main.py recalculate-diffs august 2025")
                     return False
             elif command == "help":
                 print("🚀 VESTIAIRE MONITOR - Comandi disponibili:")
@@ -376,7 +376,7 @@ def test_sheets():
         
         # Test con dati fittizi
         test_data = [
-            {"name": "Test Profile", "url": "https://example.com", "articles": 100, "sales": 50, "timestamp": "2024-01-01 12:00:00"}
+            {"name": "Test Profile", "url": "https://example.com", "articles": 100, "sales": 50, "timestamp": "2025-01-01 12:00:00"}
         ]
         
         import json as _json
@@ -876,7 +876,7 @@ if __name__ == "__main__":
                 recalculate_month_diffs(month_name, year)
             else:
                 print("❌ Uso: python main.py recalculate-diffs <month_name> <year>")
-                print("   Esempio: python main.py recalculate-diffs august 2024")
+                print("   Esempio: python main.py recalculate-diffs august 2025")
 
         elif command == "debug-scraping":
             debug_scraping_issue()
