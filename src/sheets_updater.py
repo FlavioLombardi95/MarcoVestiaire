@@ -407,11 +407,301 @@ class GoogleSheetsUpdater:
         except Exception as e:
             logger.error(f"Errore nella creazione tab mensile: {e}")
 
+    def update_previous_days_diffs(self, month_name: str, year: int, month: int, day: int):
+        """Aggiorna i calcoli delle differenze per tutti i giorni precedenti del mese."""
+        try:
+            logger.info(f"Aggiornamento differenze per i giorni precedenti in {month_name}")
+            
+            # Leggi dati attuali
+            result = self.service.spreadsheets().values().get(
+                spreadsheetId=self.spreadsheet_id,
+                range=f"{month_name}!A:ZZ"
+            ).execute()
+            values = result.get('values', [])
+            
+            if not values or len(values) < 3:
+                logger.info(f"Tab {month_name} non ha dati sufficienti per aggiornare differenze")
+                return
+            
+            # Per ogni giorno dal 2 in poi, calcola le differenze
+            for current_day in range(2, day + 1):
+                logger.info(f"Calcolo differenze per il giorno {current_day}")
+                
+                # Calcola colonne per il giorno corrente
+                base_col = 3 + (current_day-1)*4
+                articoli_col = base_col
+                vendite_col = base_col+1
+                diff_stock_col = base_col+2
+                diff_vendite_col = base_col+3
+                
+                # Calcola colonne per il giorno precedente
+                prev_articoli_col = 3 + (current_day-2)*4
+                prev_vendite_col = 4 + (current_day-2)*4
+                
+                # Per ogni riga profilo (escludi header e totali)
+                for row_idx in range(2, len(values)):
+                    if values[row_idx] and values[row_idx][0] and values[row_idx][0] != "Totali":
+                        row = values[row_idx]
+                        
+                        # Allunga la riga se necessario
+                        while len(row) < diff_vendite_col + 1:
+                            row.append("")
+                        
+                        # Leggi dati del giorno corrente
+                        current_articoli = None
+                        current_vendite = None
+                        
+                        if articoli_col < len(row) and row[articoli_col]:
+                            try:
+                                clean_val = str(row[articoli_col]).replace("'", "").replace(" ", "").strip()
+                                current_articoli = int(clean_val) if clean_val else None
+                            except (ValueError, TypeError):
+                                current_articoli = None
+                        
+                        if vendite_col < len(row) and row[vendite_col]:
+                            try:
+                                clean_val = str(row[vendite_col]).replace("'", "").replace(" ", "").strip()
+                                current_vendite = int(clean_val) if clean_val else None
+                            except (ValueError, TypeError):
+                                current_vendite = None
+                        
+                        # Leggi dati del giorno precedente
+                        prev_articoli = None
+                        prev_vendite = None
+                        
+                        if prev_articoli_col < len(row) and row[prev_articoli_col]:
+                            try:
+                                clean_val = str(row[prev_articoli_col]).replace("'", "").replace(" ", "").strip()
+                                prev_articoli = int(clean_val) if clean_val else None
+                            except (ValueError, TypeError):
+                                prev_articoli = None
+                        
+                        if prev_vendite_col < len(row) and row[prev_vendite_col]:
+                            try:
+                                clean_val = str(row[prev_vendite_col]).replace("'", "").replace(" ", "").strip()
+                                prev_vendite = int(clean_val) if clean_val else None
+                            except (ValueError, TypeError):
+                                prev_vendite = None
+                        
+                        # Calcola differenze solo se abbiamo entrambi i valori
+                        if current_articoli is not None and prev_articoli is not None:
+                            diff_stock = current_articoli - prev_articoli
+                            row[diff_stock_col] = diff_stock
+                            logger.info(f"  {row[0]} giorno {current_day}: diff_stock = {current_articoli} - {prev_articoli} = {diff_stock}")
+                        
+                        if current_vendite is not None and prev_vendite is not None:
+                            diff_vendite = current_vendite - prev_vendite
+                            row[diff_vendite_col] = diff_vendite
+                            logger.info(f"  {row[0]} giorno {current_day}: diff_vendite = {current_vendite} - {prev_vendite} = {diff_vendite}")
+            
+            # Scrivi i dati aggiornati
+            self.service.spreadsheets().values().update(
+                spreadsheetId=self.spreadsheet_id,
+                range=f"{month_name}!A1",
+                valueInputOption='USER_ENTERED',
+                body={'values': values}
+            ).execute()
+            
+            logger.info(f"Differenze aggiornate per i giorni precedenti in {month_name}")
+            
+        except Exception as e:
+            logger.error(f"Errore nell'aggiornamento delle differenze precedenti: {e}")
+
+    def get_previous_month_last_day_data(self, year: int, month: int) -> Dict[str, Dict]:
+        """Recupera i dati dell'ultimo giorno del mese precedente per calcolare le differenze del primo giorno."""
+        try:
+            # Calcola il mese precedente
+            if month == 1:
+                prev_month = 12
+                prev_year = year - 1
+            else:
+                prev_month = month - 1
+                prev_year = year
+            
+            prev_month_name = calendar.month_name[prev_month].lower()
+            
+            # Ottieni l'ultimo giorno del mese precedente
+            last_day = calendar.monthrange(prev_year, prev_month)[1]
+            
+            logger.info(f"Recupero dati del {last_day} {prev_month_name} {prev_year}")
+            
+            # Leggi i dati dell'ultimo giorno del mese precedente
+            result = self.service.spreadsheets().values().get(
+                spreadsheetId=self.spreadsheet_id,
+                range=f"{prev_month_name}!A:ZZ"
+            ).execute()
+            values = result.get('values', [])
+            
+            if not values or len(values) < 3:
+                logger.info(f"Tab {prev_month_name} non ha dati sufficienti")
+                return {}
+            
+            # Calcola colonne per l'ultimo giorno del mese precedente
+            base_col = 3 + (last_day-1)*4
+            articoli_col = base_col
+            vendite_col = base_col+1
+            
+            # Estrai i dati per ogni profilo
+            previous_data = {}
+            for row_idx in range(2, len(values)):
+                if values[row_idx] and values[row_idx][0] and values[row_idx][0] != "Totali":
+                    profile_name = values[row_idx][0]
+                    
+                    articoli = None
+                    vendite = None
+                    
+                    if articoli_col < len(values[row_idx]) and values[row_idx][articoli_col]:
+                        try:
+                            clean_val = str(values[row_idx][articoli_col]).replace("'", "").replace(" ", "").strip()
+                            articoli = int(clean_val) if clean_val else None
+                        except (ValueError, TypeError):
+                            articoli = None
+                    
+                    if vendite_col < len(values[row_idx]) and values[row_idx][vendite_col]:
+                        try:
+                            clean_val = str(values[row_idx][vendite_col]).replace("'", "").replace(" ", "").strip()
+                            vendite = int(clean_val) if clean_val else None
+                        except (ValueError, TypeError):
+                            vendite = None
+                    
+                    if articoli is not None or vendite is not None:
+                        previous_data[profile_name] = {
+                            'articles': articoli,
+                            'sales': vendite
+                        }
+                        logger.info(f"Dati precedenti per {profile_name}: articoli={articoli}, vendite={vendite}")
+            
+            return previous_data
+            
+        except Exception as e:
+            logger.error(f"Errore nel recupero dati mese precedente: {e}")
+            return {}
+
+    def recalculate_all_month_diffs(self, month_name: str, year: int, month: int):
+        """Ricalcola tutte le differenze per un intero mese."""
+        try:
+            logger.info(f"Ricalcolo di tutte le differenze per {month_name} {year}")
+            
+            # Ottieni il numero di giorni nel mese
+            days_in_month = calendar.monthrange(year, month)[1]
+            
+            # Leggi dati attuali
+            result = self.service.spreadsheets().values().get(
+                spreadsheetId=self.spreadsheet_id,
+                range=f"{month_name}!A:ZZ"
+            ).execute()
+            values = result.get('values', [])
+            
+            if not values or len(values) < 3:
+                logger.error(f"Tab {month_name} non ha dati sufficienti")
+                return False
+            
+            # Recupera dati del mese precedente per il primo giorno
+            previous_month_data = self.get_previous_month_last_day_data(year, month)
+            
+            # Per ogni giorno del mese, calcola le differenze
+            for current_day in range(1, days_in_month + 1):
+                logger.info(f"Ricalcolo differenze per il giorno {current_day}")
+                
+                # Calcola colonne per il giorno corrente
+                base_col = 3 + (current_day-1)*4
+                articoli_col = base_col
+                vendite_col = base_col+1
+                diff_stock_col = base_col+2
+                diff_vendite_col = base_col+3
+                
+                # Per ogni riga profilo (escludi header e totali)
+                for row_idx in range(2, len(values)):
+                    if values[row_idx] and values[row_idx][0] and values[row_idx][0] != "Totali":
+                        row = values[row_idx]
+                        profile_name = row[0]
+                        
+                        # Allunga la riga se necessario
+                        while len(row) < diff_vendite_col + 1:
+                            row.append("")
+                        
+                        # Leggi dati del giorno corrente
+                        current_articoli = None
+                        current_vendite = None
+                        
+                        if articoli_col < len(row) and row[articoli_col]:
+                            try:
+                                clean_val = str(row[articoli_col]).replace("'", "").replace(" ", "").strip()
+                                current_articoli = int(clean_val) if clean_val else None
+                            except (ValueError, TypeError):
+                                current_articoli = None
+                        
+                        if vendite_col < len(row) and row[vendite_col]:
+                            try:
+                                clean_val = str(row[vendite_col]).replace("'", "").replace(" ", "").strip()
+                                current_vendite = int(clean_val) if clean_val else None
+                            except (ValueError, TypeError):
+                                current_vendite = None
+                        
+                        # Determina dati precedenti
+                        prev_articoli = None
+                        prev_vendite = None
+                        
+                        if current_day == 1:  # Primo giorno - usa dati del mese precedente
+                            if profile_name in previous_month_data:
+                                prev_articoli = previous_month_data[profile_name].get('articles')
+                                prev_vendite = previous_month_data[profile_name].get('sales')
+                        else:  # Altri giorni - usa dati del giorno precedente
+                            prev_articoli_col = 3 + (current_day-2)*4
+                            prev_vendite_col = 4 + (current_day-2)*4
+                            
+                            if prev_articoli_col < len(row) and row[prev_articoli_col]:
+                                try:
+                                    clean_val = str(row[prev_articoli_col]).replace("'", "").replace(" ", "").strip()
+                                    prev_articoli = int(clean_val) if clean_val else None
+                                except (ValueError, TypeError):
+                                    prev_articoli = None
+                            
+                            if prev_vendite_col < len(row) and row[prev_vendite_col]:
+                                try:
+                                    clean_val = str(row[prev_vendite_col]).replace("'", "").replace(" ", "").strip()
+                                    prev_vendite = int(clean_val) if clean_val else None
+                                except (ValueError, TypeError):
+                                    prev_vendite = None
+                        
+                        # Calcola differenze solo se abbiamo entrambi i valori
+                        if current_articoli is not None and prev_articoli is not None:
+                            diff_stock = current_articoli - prev_articoli
+                            row[diff_stock_col] = diff_stock
+                            logger.info(f"  {profile_name} giorno {current_day}: diff_stock = {current_articoli} - {prev_articoli} = {diff_stock}")
+                        
+                        if current_vendite is not None and prev_vendite is not None:
+                            diff_vendite = current_vendite - prev_vendite
+                            row[diff_vendite_col] = diff_vendite
+                            logger.info(f"  {profile_name} giorno {current_day}: diff_vendite = {current_vendite} - {prev_vendite} = {diff_vendite}")
+            
+            # Scrivi i dati aggiornati
+            self.service.spreadsheets().values().update(
+                spreadsheetId=self.spreadsheet_id,
+                range=f"{month_name}!A1",
+                valueInputOption='USER_ENTERED',
+                body={'values': values}
+            ).execute()
+            
+            # Aggiorna i totali mensili delle diff vendite
+            self.update_monthly_diff_vendite_totals(month_name, year)
+            
+            logger.info(f"Ricalcolo completato per {month_name} {year}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Errore nel ricalcolo delle differenze per {month_name}: {e}")
+            return False
+
     def update_monthly_sheet(self, scraped_data: list, year: int, month: int, day: int):
         """Aggiorna la tab mensile con i dati del giorno, calcolando le differenze."""
         import copy
         month_name = calendar.month_name[month].lower()
         self.create_monthly_tab(month_name, year)
+        
+        # Aggiorna anche i dati dei giorni precedenti se necessario
+        if day > 1:
+            self.update_previous_days_diffs(month_name, year, month, day)
         
         # Leggi dati attuali
         result = self.service.spreadsheets().values().get(
@@ -493,7 +783,18 @@ class GoogleSheetsUpdater:
             # Calcola differenze
             prev_articoli = None
             prev_vendite = None
-            if day > 1:  # Solo se non è il primo giorno del mese
+            
+            if day == 1:  # Primo giorno del mese - usa dati del mese precedente
+                logger.info(f"Primo giorno del mese {month}, recupero dati del mese precedente")
+                previous_month_data = self.get_previous_month_last_day_data(year, month)
+                if name in previous_month_data:
+                    prev_articoli = previous_month_data[name].get('articles')
+                    prev_vendite = previous_month_data[name].get('sales')
+                    logger.info(f"  Dati mese precedente per {name}: articoli={prev_articoli}, vendite={prev_vendite}")
+                else:
+                    logger.info(f"  Nessun dato del mese precedente trovato per {name}")
+            
+            elif day > 1:  # Giorni successivi - usa dati del giorno precedente
                 prev_articoli_col = 3 + (day-2)*4  # Giorno precedente
                 prev_vendite_col = 4 + (day-2)*4   # Giorno precedente
                 

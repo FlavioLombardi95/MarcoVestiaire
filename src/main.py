@@ -155,6 +155,15 @@ def main():
                 return debug_totals()
             elif command == "test-credentials":
                 return test_credentials()
+            elif command == "recalculate-diffs":
+                if len(sys.argv) > 3:
+                    month_name = sys.argv[2].lower()
+                    year = int(sys.argv[3])
+                    return recalculate_month_diffs(month_name, year)
+                else:
+                    logger.error("❌ Uso: python main.py recalculate-diffs <month_name> <year>")
+                    logger.error("   Esempio: python main.py recalculate-diffs august 2024")
+                    return False
             elif command == "help":
                 print("🚀 VESTIAIRE MONITOR - Comandi disponibili:")
                 print("  python main.py                  - Esecuzione normale")
@@ -162,6 +171,7 @@ def main():
                 print("  python main.py debug-scraping   - Debug scraping")
                 print("  python main.py debug-totali     - Debug calcoli totali")
                 print("  python main.py test-credentials - Test credenziali Google Sheets")
+                print("  python main.py recalculate-diffs <month> <year> - Ricalcola differenze per un mese")
                 print("  python main.py help             - Mostra questo help")
                 return True
             else:
@@ -794,6 +804,50 @@ def test_diff_vendite_column():
         return False
 
 
+def recalculate_month_diffs(month_name: str, year: int):
+    """Ricalcola tutte le differenze per un mese specifico."""
+    try:
+        logger.info(f"🔄 RICALCOLO DIFFERENZE PER {month_name.upper()} {year}")
+        logger.info("=" * 50)
+        
+        # Ottieni credenziali
+        credentials_json = os.environ.get('GOOGLE_SHEETS_CREDENTIALS')
+        if not credentials_json:
+            logger.error("❌ Credenziali non trovate nelle variabili d'ambiente")
+            return False
+        
+        # Inizializza updater
+        updater = GoogleSheetsUpdater(credentials_json)
+        
+        # Converti nome mese in numero
+        month_names = {
+            'january': 1, 'february': 2, 'march': 3, 'april': 4, 'may': 5, 'june': 6,
+            'july': 7, 'august': 8, 'september': 9, 'october': 10, 'november': 11, 'december': 12
+        }
+        
+        if month_name not in month_names:
+            logger.error(f"❌ Nome mese '{month_name}' non valido")
+            logger.error(f"   Nomi validi: {list(month_names.keys())}")
+            return False
+        
+        month_num = month_names[month_name]
+        
+        # Ricalcola tutte le differenze
+        success = updater.recalculate_all_month_diffs(month_name, year, month_num)
+        
+        if success:
+            logger.info(f"✅ Ricalcolo differenze per {month_name} {year} completato con successo!")
+            logger.info("📊 Tutte le colonne diff stock e diff vendite sono state aggiornate")
+        else:
+            logger.error(f"❌ Ricalcolo differenze per {month_name} {year} fallito!")
+            
+        return success
+        
+    except Exception as e:
+        logger.error(f"Errore nel ricalcolo differenze: {e}")
+        traceback.print_exc()
+        return False
+
 
 if __name__ == "__main__":
     # Controlla gli argomenti della riga di comando
@@ -815,6 +869,14 @@ if __name__ == "__main__":
             test_overview_sheet()
         elif command == "test-diff-vendite":
             test_diff_vendite_column()
+        elif command == "recalculate-diffs":
+            if len(sys.argv) > 3:
+                month_name = sys.argv[2].lower()
+                year = int(sys.argv[3])
+                recalculate_month_diffs(month_name, year)
+            else:
+                print("❌ Uso: python main.py recalculate-diffs <month_name> <year>")
+                print("   Esempio: python main.py recalculate-diffs august 2024")
 
         elif command == "debug-scraping":
             debug_scraping_issue()
