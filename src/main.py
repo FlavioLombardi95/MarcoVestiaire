@@ -168,6 +168,8 @@ def main():
                 return debug_july_data()
             elif command == "fix-august-1st":
                 return fix_august_1st_diffs()
+            elif command == "fix-august-1st-totals":
+                return fix_august_1st_totals()
             elif command == "help":
                 print("🚀 VESTIAIRE MONITOR - Comandi disponibili:")
                 print("  python main.py                  - Esecuzione normale")
@@ -178,6 +180,7 @@ def main():
                 print("  python main.py recalculate-diffs <month> <year> - Ricalcola differenze per un mese")
                 print("  python main.py debug-july-data   - Debug dati del 31 luglio")
                 print("  python main.py fix-august-1st    - Corregge differenze del 1° agosto")
+                print("  python main.py fix-august-1st-totals - Corregge i totali del 1° agosto")
                 print("  python main.py help             - Mostra questo help")
                 return True
             else:
@@ -1013,6 +1016,99 @@ def fix_august_1st_diffs():
         traceback.print_exc()
         return False
 
+def fix_august_1st_totals():
+    """Corregge specificamente i totali del 1° agosto nella riga Totali."""
+    try:
+        logger.info("🔧 CORREZIONE TOTALI 1° AGOSTO")
+        logger.info("=" * 50)
+        
+        credentials_json = os.environ.get('GOOGLE_SHEETS_CREDENTIALS')
+        if not credentials_json:
+            logger.error("❌ Credenziali non trovate nelle variabili d'ambiente")
+            return False
+        
+        updater = GoogleSheetsUpdater(credentials_json)
+        
+        # Leggi i dati della tab august
+        result = updater.service.spreadsheets().values().get(
+            spreadsheetId=updater.spreadsheet_id,
+            range="august!A:ZZ"
+        ).execute()
+        values = result.get('values', [])
+        
+        if not values or len(values) < 16:
+            logger.error("❌ Tab august non ha dati sufficienti")
+            return False
+        
+        # Trova la riga Totali (dovrebbe essere la riga 16)
+        totali_row_idx = None
+        for i, row in enumerate(values):
+            if row and row[0] == "Totali":
+                totali_row_idx = i
+                break
+        
+        if totali_row_idx is None:
+            logger.error("❌ Riga Totali non trovata")
+            return False
+        
+        logger.info(f"✅ Riga Totali trovata all'indice {totali_row_idx}")
+        
+        # Calcola i totali del 1° agosto
+        diff_stock_col_1aug = 5  # Colonna F
+        diff_vendite_col_1aug = 6  # Colonna G
+        
+        total_diff_stock = 0
+        total_diff_vendite = 0
+        
+        # Somma i valori di diff stock e diff vendite del 1° agosto per tutti i profili
+        for row_idx in range(2, totali_row_idx):  # Salta header e inizia dai profili
+            if len(values[row_idx]) > max(diff_stock_col_1aug, diff_vendite_col_1aug):
+                # Diff stock
+                if values[row_idx][diff_stock_col_1aug]:
+                    try:
+                        diff_stock_val = int(str(values[row_idx][diff_stock_col_1aug]).replace("'", "").strip())
+                        total_diff_stock += diff_stock_val
+                        logger.info(f"  {values[row_idx][0]}: diff_stock = {diff_stock_val}")
+                    except (ValueError, TypeError):
+                        logger.warning(f"  {values[row_idx][0]}: diff_stock non numerico: {values[row_idx][diff_stock_col_1aug]}")
+                
+                # Diff vendite
+                if values[row_idx][diff_vendite_col_1aug]:
+                    try:
+                        diff_vendite_val = int(str(values[row_idx][diff_vendite_col_1aug]).replace("'", "").strip())
+                        total_diff_vendite += diff_vendite_val
+                        logger.info(f"  {values[row_idx][0]}: diff_vendite = {diff_vendite_val}")
+                    except (ValueError, TypeError):
+                        logger.warning(f"  {values[row_idx][0]}: diff_vendite non numerico: {values[row_idx][diff_vendite_col_1aug]}")
+        
+        logger.info(f"📊 TOTALI CALCOLATI:")
+        logger.info(f"  Diff Stock 1° agosto: {total_diff_stock}")
+        logger.info(f"  Diff Vendite 1° agosto: {total_diff_vendite}")
+        
+        # Assicurati che la riga Totali abbia abbastanza colonne
+        while len(values[totali_row_idx]) <= max(diff_stock_col_1aug, diff_vendite_col_1aug):
+            values[totali_row_idx].append("")
+        
+        # Aggiorna i totali
+        values[totali_row_idx][diff_stock_col_1aug] = total_diff_stock
+        values[totali_row_idx][diff_vendite_col_1aug] = total_diff_vendite
+        
+        # Scrivi i dati aggiornati
+        updater.service.spreadsheets().values().update(
+            spreadsheetId=updater.spreadsheet_id,
+            range="august!A1",
+            valueInputOption='USER_ENTERED',
+            body={'values': values}
+        ).execute()
+        
+        logger.info("✅ Totali del 1° agosto aggiornati con successo!")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Errore nella correzione totali 1° agosto: {e}")
+        traceback.print_exc()
+        return False
+
 
 if __name__ == "__main__":
     # Controlla gli argomenti della riga di comando
@@ -1046,6 +1142,8 @@ if __name__ == "__main__":
             debug_july_data()
         elif command == "fix-august-1st":
             fix_august_1st_diffs()
+        elif command == "fix-august-1st-totals":
+            fix_august_1st_totals()
 
         elif command == "debug-scraping":
             debug_scraping_issue()
