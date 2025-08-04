@@ -1187,6 +1187,41 @@ def test_overview():
         traceback.print_exc()
         return False
 
+def fix_monthly_totals(month_name: str):
+    """Corregge i totali della colonna B e della riga Totali per un mese specifico."""
+    try:
+        logger.info(f"🔧 CORREZIONE TOTALI MENSILI PER {month_name.upper()}")
+        logger.info("=" * 50)
+        
+        credentials_json = os.environ.get('GOOGLE_SHEETS_CREDENTIALS')
+        if not credentials_json:
+            logger.error("❌ Credenziali non trovate nelle variabili d'ambiente")
+            return False
+        
+        updater = GoogleSheetsUpdater(credentials_json)
+        
+        # Ottieni anno corrente
+        current_year = datetime.now().year
+        
+        logger.info(f"🔄 Correzione totali per {month_name} {current_year}...")
+        success = updater.update_monthly_diff_vendite_totals(month_name, current_year)
+        
+        if success:
+            logger.info(f"✅ Totali corretti per {month_name}!")
+            logger.info("📊 Operazioni completate:")
+            logger.info("   - Ricalcolati i totali della colonna B (Diff Vendite [Mese])")
+            logger.info("   - Ricalcolata la riga Totali")
+            logger.info("   - Aggiornati tutti i totali delle colonne diff vendite")
+            return True
+        else:
+            logger.error(f"❌ Errore nella correzione dei totali per {month_name}")
+            return False
+            
+    except Exception as e:
+        logger.error(f"Errore nella correzione totali mensili: {e}")
+        traceback.print_exc()
+        return False
+
 def force_update_overview():
     """Forza l'aggiornamento della tab Overview con retry e delay."""
     try:
@@ -1250,6 +1285,7 @@ if __name__ == "__main__":
         print("  debug-july-data - Debug per i dati di luglio")
         print("  fix-august-1st - Corregge le differenze del 1° agosto")
         print("  fix-august-1st-totals - Corregge i totali del 1° agosto")
+        print("  fix-monthly-totals <mese> - Corregge i totali mensili per un mese")
         print("  update-overview - Aggiorna la tab Overview con tutti i mesi")
         print("  force-update-overview - Forza l'aggiornamento Overview con retry")
         print("  test-overview - Testa la lettura dei dati per Overview")
@@ -1266,6 +1302,15 @@ if __name__ == "__main__":
     elif command == "update-overview":
         success = update_overview()
         sys.exit(0 if success else 1)
+    elif command == "fix-monthly-totals":
+        if len(sys.argv) > 2:
+            month_name = sys.argv[2].lower()
+            success = fix_monthly_totals(month_name)
+            sys.exit(0 if success else 1)
+        else:
+            print("Uso: python main.py fix-monthly-totals <mese>")
+            print("Esempio: python main.py fix-monthly-totals july")
+            sys.exit(1)
     elif command == "fix-august-1st-totals":
         success = fix_august_1st_totals()
         sys.exit(0 if success else 1)

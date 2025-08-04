@@ -54,6 +54,10 @@ jobs:
         echo "=== CORREZIONE TOTALI 1° AGOSTO ==="
         python main.py fix-august-1st-totals
         
+        echo "=== CORREZIONE TOTALI MENSILI ==="
+        python main.py fix-monthly-totals july
+        python main.py fix-monthly-totals august
+        
         echo "=== AGGIORNAMENTO TAB OVERVIEW ==="
         python main.py update-overview
         

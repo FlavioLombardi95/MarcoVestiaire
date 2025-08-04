@@ -1044,7 +1044,7 @@ class GoogleSheetsUpdater:
         self.format_monthly_sheet(month_name, year)
 
     def update_monthly_diff_vendite_totals(self, month_name: str, year: int):
-        """Aggiorna la seconda colonna con i totali mensili delle diff vendite."""
+        """Aggiorna la seconda colonna con i totali mensili delle diff vendite e ricalcola la riga Totali."""
         try:
             # Leggi i dati attuali
             result = self.service.spreadsheets().values().get(
@@ -1078,8 +1078,21 @@ class GoogleSheetsUpdater:
             
             logger.info(f"Trovate {len(diff_vendite_columns)} colonne diff vendite: {diff_vendite_columns}")
             
+            # Trova la riga Totali
+            totali_row_idx = None
+            for i, row in enumerate(values):
+                if row and row[0] == "Totali":
+                    totali_row_idx = i
+                    break
+            
+            if totali_row_idx is None:
+                logger.error(f"Riga 'Totali' non trovata in {month_name}")
+                return False
+            
+            logger.info(f"Riga Totali trovata all'indice {totali_row_idx}")
+            
             # Per ogni riga profilo (escludi header e totali)
-            for row_idx in range(2, len(values)):
+            for row_idx in range(2, totali_row_idx):
                 if values[row_idx] and values[row_idx][0] and values[row_idx][0] != "Totali":
                     total_diff_vendite = 0
                     
@@ -1088,14 +1101,12 @@ class GoogleSheetsUpdater:
                         if col_idx < len(values[row_idx]):
                             try:
                                 cell_value = values[row_idx][col_idx]
-                                logger.info(f"  Colonna {col_idx}: valore = '{cell_value}'")
                                 if cell_value and str(cell_value).strip():
                                     # Rimuovi caratteri non numerici e converti
                                     clean_val = str(cell_value).replace("'", "").replace(" ", "").strip()
                                     if clean_val:
                                         val_int = int(clean_val)
                                         total_diff_vendite += val_int
-                                        logger.info(f"    Aggiunto {val_int} al totale (ora = {total_diff_vendite})")
                             except (ValueError, TypeError) as e:
                                 logger.warning(f"    Errore nel parsing del valore '{cell_value}': {e}")
                                 pass
@@ -1105,6 +1116,49 @@ class GoogleSheetsUpdater:
                         values[row_idx][1] = total_diff_vendite
                         logger.info(f"Profilo {values[row_idx][0]}: totale diff vendite = {total_diff_vendite}")
             
+            # RICALCOLA LA RIGA TOTALI
+            logger.info("Ricalcolo riga Totali...")
+            
+            # Assicurati che la riga Totali abbia abbastanza colonne
+            while len(values[totali_row_idx]) <= max(diff_vendite_columns):
+                values[totali_row_idx].append("")
+            
+            # Calcola i totali per ogni colonna diff vendite
+            for col_idx in diff_vendite_columns:
+                col_total = 0
+                for row_idx in range(2, totali_row_idx):
+                    if values[row_idx] and col_idx < len(values[row_idx]) and values[row_idx][col_idx]:
+                        try:
+                            cell_value = values[row_idx][col_idx]
+                            if cell_value and str(cell_value).strip():
+                                clean_val = str(cell_value).replace("'", "").replace(" ", "").strip()
+                                if clean_val:
+                                    col_total += int(clean_val)
+                        except (ValueError, TypeError):
+                            pass
+                
+                # Aggiorna il totale nella riga Totali
+                values[totali_row_idx][col_idx] = col_total
+                logger.info(f"Totale colonna {col_idx}: {col_total}")
+            
+            # Calcola anche il totale della colonna B (Diff Vendite [Mese])
+            col_b_total = 0
+            for row_idx in range(2, totali_row_idx):
+                if values[row_idx] and len(values[row_idx]) > 1 and values[row_idx][1]:
+                    try:
+                        cell_value = values[row_idx][1]
+                        if cell_value and str(cell_value).strip():
+                            clean_val = str(cell_value).replace("'", "").replace(" ", "").strip()
+                            if clean_val:
+                                col_b_total += int(clean_val)
+                    except (ValueError, TypeError):
+                        pass
+            
+            # Aggiorna il totale della colonna B nella riga Totali
+            if len(values[totali_row_idx]) > 1:
+                values[totali_row_idx][1] = col_b_total
+                logger.info(f"Totale colonna B (Diff Vendite [Mese]): {col_b_total}")
+            
             # Scrivi i dati aggiornati
             self.service.spreadsheets().values().update(
                 spreadsheetId=self.spreadsheet_id,
@@ -1113,7 +1167,7 @@ class GoogleSheetsUpdater:
                 body={'values': values}
             ).execute()
             
-            logger.info(f"Totali diff vendite mensili aggiornati per {month_name}")
+            logger.info(f"Totali diff vendite mensili e riga Totali aggiornati per {month_name}")
             return True
             
         except Exception as e:
