@@ -1229,70 +1229,110 @@ def test_overview():
         traceback.print_exc()
         return False
 
+def force_update_overview():
+    """Forza l'aggiornamento della tab Overview con retry e delay."""
+    try:
+        logger.info("🚀 FORCE UPDATE TAB OVERVIEW")
+        logger.info("=" * 50)
+        
+        credentials_json = os.environ.get('GOOGLE_SHEETS_CREDENTIALS')
+        if not credentials_json:
+            logger.error("❌ Credenziali non trovate nelle variabili d'ambiente")
+            return False
+        
+        updater = GoogleSheetsUpdater(credentials_json)
+        
+        # Retry con delay
+        max_retries = 3
+        for attempt in range(max_retries):
+            try:
+                logger.info(f"🔄 Tentativo {attempt + 1}/{max_retries}...")
+                
+                # Delay prima di iniziare
+                if attempt > 0:
+                    logger.info("⏳ Attendo 30 secondi prima del retry...")
+                    time.sleep(30)
+                
+                success = updater.update_overview_sheet()
+                
+                if success:
+                    logger.info("✅ Tab Overview aggiornata con successo!")
+                    logger.info("📋 Struttura creata:")
+                    logger.info("   - Tutti i 12 mesi dell'anno")
+                    logger.info("   - Totali di riga (per profilo)")
+                    logger.info("   - Totali di colonna (per mese)")
+                    logger.info("   - Tab future create (september, october, november, december)")
+                    return True
+                else:
+                    logger.error(f"❌ Tentativo {attempt + 1} fallito")
+                    
+            except Exception as e:
+                logger.error(f"❌ Errore nel tentativo {attempt + 1}: {e}")
+                if "429" in str(e):
+                    logger.info("🔄 Rate limit rilevato, attendo...")
+                else:
+                    logger.error(f"Errore specifico: {e}")
+        
+        logger.error("❌ Tutti i tentativi falliti")
+        return False
+        
+    except Exception as e:
+        logger.error(f"Errore nel force update Overview: {e}")
+        traceback.print_exc()
+        return False
+
 
 if __name__ == "__main__":
     # Controlla gli argomenti della riga di comando
-    if len(sys.argv) > 1:
-        command = sys.argv[1].lower()
-        if command == "test":
-            test_scraping()
-        elif command == "performance":
-            test_performance()
-        elif command == "test-sheets":
-            test_sheets()
-        elif command == "aggiorna-statico":
-            aggiorna_sheet_con_dati_statici()
-        elif command == "aggiorna-mensile-statico":
-            aggiorna_tab_mensile_statico()
-        elif command == "formatta-mensile":
-            formatta_tab_mensile()
-        elif command == "test-overview":
-            test_overview_sheet()
-        elif command == "test-diff-vendite":
-            test_diff_vendite_column()
-        elif command == "recalculate-diffs":
-            if len(sys.argv) > 3:
-                month_name = sys.argv[2].lower()
-                year = int(sys.argv[3])
-                recalculate_month_diffs(month_name, year)
-            else:
-                print("❌ Uso: python main.py recalculate-diffs <month_name> <year>")
-                print("   Esempio: python main.py recalculate-diffs august 2025")
-        elif command == "debug-july-data":
-            debug_july_data()
-        elif command == "fix-august-1st":
-            fix_august_1st_diffs()
-        elif command == "fix-august-1st-totals":
-            fix_august_1st_totals()
-        elif command == "update-overview":
-            update_overview()
-        elif command == "test-overview":
-            success = test_overview()
-            sys.exit(0 if success else 1)
-
-        elif command == "debug-scraping":
-            debug_scraping_issue()
-        elif command == "debug-totali":
-            debug_totals()
-        elif command == "help":
-            print("Comandi disponibili:")
-            print("  python main.py              - Esegue il monitoraggio completo")
-            print("  python main.py test         - Testa solo lo scraping")
-            print("  python main.py performance  - Test dettagliato delle performance")
-            print("  python main.py test-sheets  - Testa solo Google Sheets")
-            print("  python main.py aggiorna-statico - Aggiorna sheet solo con dati statici")
-            print("  python main.py aggiorna-mensile-statico - Aggiorna tab mensile con dati statici")
-            print("  python main.py formatta-mensile - Applica solo la formattazione alla tab mensile")
-            print("  python main.py test-overview - Testa la creazione e aggiornamento della tab Overview")
-            print("  python main.py test-diff-vendite - Testa la colonna diff vendite mensili")
-            print("  python main.py update-overview - Aggiorna la tab Overview con tutti i mesi")
-
-            print("  python main.py debug-scraping - Debugga il problema dei dati identici")
-            print("  python main.py debug-totali - Debugga i calcoli dei totali nelle Google Sheets")
-            print("  python main.py help         - Mostra questo aiuto")
-        else:
-            print(f"Comando sconosciuto: {command}")
-            print("Usa 'python main.py help' per vedere i comandi disponibili")
+    if len(sys.argv) < 2:
+        print("Uso: python main.py <comando> [parametri]")
+        print("Comandi disponibili:")
+        print("  <mese> <anno> - Aggiorna il foglio per il mese/anno specificato")
+        print("  recalculate-diffs <mese> <anno> - Ricalcola tutte le differenze per il mese")
+        print("  debug-july-data - Debug per i dati di luglio")
+        print("  fix-august-1st - Corregge le differenze del 1° agosto")
+        print("  fix-august-1st-totals - Corregge i totali del 1° agosto")
+        print("  update-overview - Aggiorna la tab Overview con tutti i mesi")
+        print("  force-update-overview - Forza l'aggiornamento Overview con retry")
+        print("  test-overview - Testa la lettura dei dati per Overview")
+        sys.exit(1)
+    
+    command = sys.argv[1].lower()
+    
+    if command == "force-update-overview":
+        success = force_update_overview()
+        sys.exit(0 if success else 1)
+    elif command == "test-overview":
+        success = test_overview()
+        sys.exit(0 if success else 1)
+    elif command == "update-overview":
+        success = update_overview()
+        sys.exit(0 if success else 1)
+    elif command == "fix-august-1st-totals":
+        success = fix_august_1st_totals()
+        sys.exit(0 if success else 1)
+    elif command == "fix-august-1st":
+        success = fix_august_1st_diffs()
+        sys.exit(0 if success else 1)
+    elif command == "debug-july-data":
+        success = debug_july_data()
+        sys.exit(0 if success else 1)
+    elif command == "recalculate-diffs":
+        if len(sys.argv) < 4:
+            print("Uso: python main.py recalculate-diffs <mese> <anno>")
+            sys.exit(1)
+        month_name = sys.argv[2].lower()
+        year = int(sys.argv[3])
+        success = recalculate_month_diffs(month_name, year)
+        sys.exit(0 if success else 1)
     else:
-        # Esegui il monitoraggio completo
-        main() 
+        # Comando normale per aggiornamento mensile
+        if len(sys.argv) < 3:
+            print("Uso: python main.py <mese> <anno>")
+            sys.exit(1)
+        
+        month_name = sys.argv[1].lower()
+        year = int(sys.argv[2])
+        
+        success = main()
+        sys.exit(0 if success else 1) 

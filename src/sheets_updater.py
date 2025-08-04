@@ -5,6 +5,7 @@ Modulo per aggiornare automaticamente il Google Sheet con i dati Vestiaire
 
 import os
 import logging
+import time
 from typing import Dict, List, Any
 from datetime import datetime, timedelta
 import json
@@ -1182,6 +1183,26 @@ class GoogleSheetsUpdater:
             from config import VESTIAIRE_PROFILES
             profiles = list(VESTIAIRE_PROFILES.keys())
             
+            # Leggi tutti i dati delle tab mensili in una volta sola per ridurre le chiamate API
+            monthly_data = {}
+            for month in all_months:
+                try:
+                    # Leggi i dati della tab mensile
+                    result = self.service.spreadsheets().values().get(
+                        spreadsheetId=self.spreadsheet_id,
+                        range=f"{month}!A:ZZ"
+                    ).execute()
+                    values = result.get('values', [])
+                    monthly_data[month] = values
+                    logger.info(f"Dati {month} caricati: {len(values)} righe")
+                    
+                    # Delay per evitare rate limit
+                    time.sleep(0.5)
+                    
+                except Exception as e:
+                    logger.error(f"Errore nel caricamento dati {month}: {e}")
+                    monthly_data[month] = []
+            
             # Per ogni profilo, calcola i totali mensili
             for profile in profiles:
                 row = [profile]
@@ -1189,12 +1210,7 @@ class GoogleSheetsUpdater:
                 
                 for month in all_months:
                     try:
-                        # Leggi i dati della tab mensile
-                        result = self.service.spreadsheets().values().get(
-                            spreadsheetId=self.spreadsheet_id,
-                            range=f"{month}!A:ZZ"
-                        ).execute()
-                        values = result.get('values', [])
+                        values = monthly_data.get(month, [])
                         
                         if not values or len(values) < 2:
                             row.append(0)
@@ -1220,8 +1236,6 @@ class GoogleSheetsUpdater:
                                 if header and "diff vendite" in str(header).lower():
                                     diff_vendite_columns.append(col_idx)
                         
-                        logger.info(f"  {profile} in {month}: trovate {len(diff_vendite_columns)} colonne diff vendite")
-                        
                         total_diff_vendite = 0
                         for col_idx in diff_vendite_columns:
                             if col_idx < len(profile_row):
@@ -1231,7 +1245,6 @@ class GoogleSheetsUpdater:
                                         clean_val = str(cell_value).replace("'", "").replace(" ", "").strip()
                                         if clean_val:
                                             total_diff_vendite += int(clean_val)
-                                            logger.info(f"    Colonna {col_idx}: {clean_val}")
                                 except (ValueError, TypeError):
                                     pass
                         
