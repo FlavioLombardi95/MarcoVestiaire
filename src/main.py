@@ -1109,6 +1109,39 @@ def fix_august_1st_totals():
         traceback.print_exc()
         return False
 
+def update_overview():
+    """Aggiorna la tab Overview con tutti i mesi dell'anno e totali."""
+    try:
+        logger.info("📊 AGGIORNAMENTO TAB OVERVIEW")
+        logger.info("=" * 50)
+        
+        credentials_json = os.environ.get('GOOGLE_SHEETS_CREDENTIALS')
+        if not credentials_json:
+            logger.error("❌ Credenziali non trovate nelle variabili d'ambiente")
+            return False
+        
+        updater = GoogleSheetsUpdater(credentials_json)
+        
+        logger.info("🔄 Aggiornamento tab Overview...")
+        success = updater.update_overview_sheet()
+        
+        if success:
+            logger.info("✅ Tab Overview aggiornata con successo!")
+            logger.info("📋 Struttura creata:")
+            logger.info("   - Tutti i 12 mesi dell'anno")
+            logger.info("   - Totali di riga (per profilo)")
+            logger.info("   - Totali di colonna (per mese)")
+            logger.info("   - Tab future create (september, october, november, december)")
+            return True
+        else:
+            logger.error("❌ Errore nell'aggiornamento della tab Overview")
+            return False
+            
+    except Exception as e:
+        logger.error(f"Errore nell'aggiornamento Overview: {e}")
+        traceback.print_exc()
+        return False
+
 
 if __name__ == "__main__":
     # Controlla gli argomenti della riga di comando
@@ -1144,6 +1177,8 @@ if __name__ == "__main__":
             fix_august_1st_diffs()
         elif command == "fix-august-1st-totals":
             fix_august_1st_totals()
+        elif command == "update-overview":
+            update_overview()
 
         elif command == "debug-scraping":
             debug_scraping_issue()
@@ -1160,6 +1195,7 @@ if __name__ == "__main__":
             print("  python main.py formatta-mensile - Applica solo la formattazione alla tab mensile")
             print("  python main.py test-overview - Testa la creazione e aggiornamento della tab Overview")
             print("  python main.py test-diff-vendite - Testa la colonna diff vendite mensili")
+            print("  python main.py update-overview - Aggiorna la tab Overview con tutti i mesi")
 
             print("  python main.py debug-scraping - Debugga il problema dei dati identici")
             print("  python main.py debug-totali - Debugga i calcoli dei totali nelle Google Sheets")

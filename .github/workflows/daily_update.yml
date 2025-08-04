@@ -51,6 +51,9 @@ jobs:
         echo "=== CORREZIONE TOTALI 1° AGOSTO ==="
         python main.py fix-august-1st-totals
         
+        echo "=== AGGIORNAMENTO TAB OVERVIEW ==="
+        python main.py update-overview
+        
     - name: Upload logs
       if: always()
       uses: actions/upload-artifact@v4

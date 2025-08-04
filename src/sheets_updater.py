@@ -1148,7 +1148,7 @@ class GoogleSheetsUpdater:
             return False
 
     def update_overview_sheet(self):
-        """Aggiorna la tab Overview con i totali mensili delle diff vendite."""
+        """Aggiorna la tab Overview con tutti i mesi dell'anno, totali di colonna e riga."""
         try:
             # Crea la tab se non esiste
             self.create_overview_sheet()
@@ -1157,22 +1157,25 @@ class GoogleSheetsUpdater:
             spreadsheet = self.service.spreadsheets().get(spreadsheetId=self.spreadsheet_id).execute()
             sheet_names = [s['properties']['title'] for s in spreadsheet['sheets']]
             
-            # Filtra solo le tab mensili (escludi Overview e altre tab)
-            month_names = []
-            for name in sheet_names:
-                if name.lower() in [calendar.month_name[i].lower() for i in range(1, 13)]:
-                    month_names.append(name.lower())
+            # Crea lista completa dei mesi dell'anno
+            all_months = [
+                'january', 'february', 'march', 'april', 'may', 'june',
+                'july', 'august', 'september', 'october', 'november', 'december'
+            ]
             
-            # Ordina le tab mensili cronologicamente
-            month_names.sort(key=lambda x: list(calendar.month_name).index(x.capitalize()))
+            # Crea le tab mancanti per i mesi futuri
+            for month in all_months:
+                if month not in sheet_names:
+                    logger.info(f"Creazione tab {month} per il futuro")
+                    self.create_monthly_tab(month, 2025)
             
-            logger.info(f"Tab mensili trovate: {month_names}")
+            logger.info(f"Tab mensili disponibili: {all_months}")
             
             # Prepara i dati per Overview
             overview_data = []
             
-            # Header: Profilo + mesi
-            header = ["Profilo"] + [month.capitalize() for month in month_names]
+            # Header: Profilo + tutti i mesi + Totale
+            header = ["Profilo"] + [month.capitalize() for month in all_months] + ["Totale"]
             overview_data.append(header)
             
             # Ottieni la lista dei profili dalla configurazione
@@ -1182,8 +1185,9 @@ class GoogleSheetsUpdater:
             # Per ogni profilo, calcola i totali mensili
             for profile in profiles:
                 row = [profile]
+                profile_total = 0
                 
-                for month in month_names:
+                for month in all_months:
                     try:
                         # Leggi i dati della tab mensile
                         result = self.service.spreadsheets().values().get(
@@ -1213,6 +1217,7 @@ class GoogleSheetsUpdater:
                             try:
                                 total = int(str(profile_row[1]).replace("'", "").replace(" ", "").strip())
                                 row.append(total)
+                                profile_total += total
                             except (ValueError, TypeError):
                                 row.append(0)
                         else:
@@ -1238,12 +1243,34 @@ class GoogleSheetsUpdater:
                                         pass
                             
                             row.append(total_diff_vendite)
+                            profile_total += total_diff_vendite
                             
                     except Exception as e:
                         logger.error(f"Errore nel calcolo per {profile} in {month}: {e}")
                         row.append(0)
                 
+                # Aggiungi il totale del profilo
+                row.append(profile_total)
                 overview_data.append(row)
+            
+            # Calcola i totali di colonna (per mese)
+            column_totals = ["TOTALE"]
+            for month_idx in range(len(all_months)):
+                month_total = 0
+                for row_idx in range(1, len(overview_data)):  # Salta header
+                    if len(overview_data[row_idx]) > month_idx + 1:
+                        try:
+                            month_total += int(str(overview_data[row_idx][month_idx + 1]).replace("'", "").strip())
+                        except (ValueError, TypeError):
+                            pass
+                column_totals.append(month_total)
+            
+            # Aggiungi il totale generale (somma di tutti i mesi)
+            grand_total = sum(column_totals[1:])  # Salta "TOTALE"
+            column_totals.append(grand_total)
+            
+            # Aggiungi la riga dei totali
+            overview_data.append(column_totals)
             
             # Scrivi i dati nella tab Overview
             self.service.spreadsheets().values().update(
@@ -1254,7 +1281,7 @@ class GoogleSheetsUpdater:
             ).execute()
             
             # Applica formattazione
-            self.format_overview_sheet(len(month_names))
+            self.format_overview_sheet(len(all_months))
             
             logger.info("Tab Overview aggiornata con successo")
             return True
@@ -1264,13 +1291,13 @@ class GoogleSheetsUpdater:
             return False
 
     def format_overview_sheet(self, num_months: int):
-        """Applica formattazione alla tab Overview."""
+        """Applica formattazione alla tab Overview con tutti i mesi e totali."""
         try:
             sheet_id = self._get_sheet_id("Overview")
             
             requests = []
             
-            # Formattazione header
+            # Formattazione header (tutti i mesi + colonna Totale)
             requests.append({
                 "repeatCell": {
                     "range": {
@@ -1278,7 +1305,7 @@ class GoogleSheetsUpdater:
                         "startRowIndex": 0,
                         "endRowIndex": 1,
                         "startColumnIndex": 0,
-                        "endColumnIndex": num_months + 1
+                        "endColumnIndex": num_months + 2  # +2 per Profilo e Totale
                     },
                     "cell": {
                         "userEnteredFormat": {
@@ -1293,7 +1320,7 @@ class GoogleSheetsUpdater:
                 }
             })
             
-            # Colori alternati per le righe dati
+            # Colori alternati per le righe dati (13 profili)
             for row_idx in range(1, 14):  # 13 profili
                 color = {"red": 0.89, "green": 0.94, "blue": 0.99} if row_idx % 2 == 0 else {"red": 1, "green": 1, "blue": 1}
                 requests.append({
@@ -1303,7 +1330,7 @@ class GoogleSheetsUpdater:
                             "startRowIndex": row_idx,
                             "endRowIndex": row_idx + 1,
                             "startColumnIndex": 0,
-                            "endColumnIndex": num_months + 1
+                            "endColumnIndex": num_months + 2  # +2 per Profilo e Totale
                         },
                         "cell": {
                             "userEnteredFormat": {
@@ -1314,8 +1341,54 @@ class GoogleSheetsUpdater:
                     }
                 })
             
+            # Formattazione speciale per la riga dei totali (riga 15)
+            requests.append({
+                "repeatCell": {
+                    "range": {
+                        "sheetId": sheet_id,
+                        "startRowIndex": 14,  # Riga 15 (indice 14)
+                        "endRowIndex": 15,
+                        "startColumnIndex": 0,
+                        "endColumnIndex": num_months + 2
+                    },
+                    "cell": {
+                        "userEnteredFormat": {
+                            "backgroundColor": {"red": 0.8, "green": 0.2, "blue": 0.2},
+                            "textFormat": {
+                                "bold": True,
+                                "foregroundColor": {"red": 1, "green": 1, "blue": 1}
+                            }
+                        }
+                    },
+                    "fields": "userEnteredFormat(backgroundColor,textFormat)"
+                }
+            })
+            
+            # Formattazione speciale per la colonna Totale (ultima colonna)
+            requests.append({
+                "repeatCell": {
+                    "range": {
+                        "sheetId": sheet_id,
+                        "startRowIndex": 0,
+                        "endRowIndex": 15,  # Fino alla riga dei totali
+                        "startColumnIndex": num_months + 1,  # Colonna Totale
+                        "endColumnIndex": num_months + 2
+                    },
+                    "cell": {
+                        "userEnteredFormat": {
+                            "backgroundColor": {"red": 0.2, "green": 0.8, "blue": 0.2},
+                            "textFormat": {
+                                "bold": True,
+                                "foregroundColor": {"red": 0, "green": 0, "blue": 0}
+                            }
+                        }
+                    },
+                    "fields": "userEnteredFormat(backgroundColor,textFormat)"
+                }
+            })
+            
             # Larghezza colonne
-            for col_idx in range(num_months + 1):
+            for col_idx in range(num_months + 2):  # +2 per Profilo e Totale
                 requests.append({
                     "updateDimensionProperties": {
                         "range": {
