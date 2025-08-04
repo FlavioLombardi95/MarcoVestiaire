@@ -43,7 +43,10 @@ jobs:
         python -c "from config import VESTIAIRE_PROFILES; print(f'Profili configurati: {len(VESTIAIRE_PROFILES)}'); print('Profili:'); [print(f'  {name}') for name in VESTIAIRE_PROFILES.keys()]; print(f'Bag presente: {\"Bag\" in VESTIAIRE_PROFILES}'); print(f'Hugo presente: {\"Hugo\" in VESTIAIRE_PROFILES}'); print(f'URL esempio: https://it.vestiairecollective.com/profile/{VESTIAIRE_PROFILES[\"Hugo\"]}/')"
         echo "=== AVVIO MONITOR ==="
         cd src
-        python main.py
+        # Ottieni mese e anno corrente
+        CURRENT_MONTH=$(date +%B | tr '[:upper:]' '[:lower:]')
+        CURRENT_YEAR=$(date +%Y)
+        python main.py $CURRENT_MONTH $CURRENT_YEAR
         
         echo "=== CORREZIONE 1° AGOSTO ==="
         python main.py fix-august-1st

@@ -7,6 +7,7 @@ Aggiornato con debugging avanzato e sistema di performance monitoring
 import sys
 import os
 import logging
+import time
 from datetime import datetime
 import traceback
 from typing import List, Dict
@@ -84,11 +85,13 @@ def load_credentials() -> Dict:
         # Prova a caricare da variabile d'ambiente
         credentials_json = os.getenv('GOOGLE_SHEETS_CREDENTIALS')
         if credentials_json:
+            logger.info("✅ Credenziali caricate da variabile d'ambiente")
             return json.loads(credentials_json)
         
         # Prova a caricare da variabile d'ambiente con percorso file
         credentials_file = os.getenv('GOOGLE_SHEETS_CREDENTIALS_FILE')
         if credentials_file and os.path.exists(credentials_file):
+            logger.info(f"✅ Credenziali caricate da file: {credentials_file}")
             with open(credentials_file, 'r') as f:
                 return json.load(f)
         
@@ -103,15 +106,15 @@ def load_credentials() -> Dict:
         for filename in possible_files:
             file_path = os.path.join(project_root, filename)
             if os.path.exists(file_path):
-                logger.info(f"Caricamento credenziali da: {file_path}")
+                logger.info(f"✅ Credenziali caricate da file locale: {file_path}")
                 with open(file_path, 'r') as f:
                     return json.load(f)
         
-        logger.warning("Nessuna credenziale trovata. Lo scraping funzionerà ma non l'aggiornamento di Google Sheets.")
+        logger.warning("⚠️ Nessuna credenziale trovata. Lo scraping funzionerà ma non l'aggiornamento di Google Sheets.")
         return {}
         
     except Exception as e:
-        logger.error(f"Errore nel caricamento delle credenziali: {e}")
+        logger.error(f"❌ Errore nel caricamento delle credenziali: {e}")
         return {}
 
 def save_debug_data(data: Dict, filename: str):
@@ -138,54 +141,10 @@ def save_debug_data(data: Dict, filename: str):
         logger.error(f"❌ Errore nel salvataggio debug: {e}")
 
 def main():
-    """Funzione principale con gestione parametri"""
+    """Funzione principale per esecuzione normale del monitoraggio"""
     try:
         logger.info("🚀 AVVIO VESTIAIRE MONITOR")
         logger.info("=" * 50)
-        
-        # Gestione parametri
-        if len(sys.argv) > 1:
-            command = sys.argv[1].lower()
-            
-            if command == "performance":
-                return test_performance()
-            elif command == "debug-scraping":
-                return debug_scraping_issue()
-            elif command == "debug-totali":
-                return debug_totals()
-            elif command == "test-credentials":
-                return test_credentials()
-            elif command == "recalculate-diffs":
-                if len(sys.argv) > 3:
-                    month_name = sys.argv[2].lower()
-                    year = int(sys.argv[3])
-                    return recalculate_month_diffs(month_name, year)
-                else:
-                    logger.error("❌ Uso: python main.py recalculate-diffs <month_name> <year>")
-                    logger.error("   Esempio: python main.py recalculate-diffs august 2025")
-                    return False
-            elif command == "debug-july-data":
-                return debug_july_data()
-            elif command == "fix-august-1st":
-                return fix_august_1st_diffs()
-            elif command == "fix-august-1st-totals":
-                return fix_august_1st_totals()
-            elif command == "help":
-                print("🚀 VESTIAIRE MONITOR - Comandi disponibili:")
-                print("  python main.py                  - Esecuzione normale")
-                print("  python main.py performance      - Test performance")
-                print("  python main.py debug-scraping   - Debug scraping")
-                print("  python main.py debug-totali     - Debug calcoli totali")
-                print("  python main.py test-credentials - Test credenziali Google Sheets")
-                print("  python main.py recalculate-diffs <month> <year> - Ricalcola differenze per un mese")
-                print("  python main.py debug-july-data   - Debug dati del 31 luglio")
-                print("  python main.py fix-august-1st    - Corregge differenze del 1° agosto")
-                print("  python main.py fix-august-1st-totals - Corregge i totali del 1° agosto")
-                print("  python main.py help             - Mostra questo help")
-                return True
-            else:
-                logger.error(f"❌ Comando '{command}' non riconosciuto. Usa 'help' per vedere i comandi disponibili.")
-                return False
         
         # Esecuzione normale
         logger.info("🔧 Controllo configurazione ambiente...")
@@ -296,9 +255,9 @@ def test_scraping():
 
 def test_performance():
     """Funzione specifica per testare le performance dello scraping"""
-    logger.info("=== TEST PERFORMANCE SCRAPING ===")
-    
     try:
+        logger.info("=== TEST PERFORMANCE SCRAPING ===")
+        
         scraper = VestiaireScraper()
         
         # Esegui lo scraping con monitoraggio completo
@@ -307,24 +266,23 @@ def test_performance():
         # Ottieni statistiche dettagliate
         stats = scraper.get_performance_stats()
         
-        print("\n" + "="*70)
-        print("🚀 ANALISI PERFORMANCE DETTAGLIATA")
-        print("="*70)
+        logger.info("🚀 ANALISI PERFORMANCE DETTAGLIATA")
+        logger.info("="*70)
         
         # Benchmark generale
-        print("⚡ BENCHMARK GENERALE:")
-        print(f"   Setup driver: {stats['driver_setup_time']:.2f}s")
-        print(f"   Scraping totale: {stats['total_scraping_time']:.2f}s")
-        print(f"   Tempo medio per profilo: {stats['average_profile_time']:.2f}s")
-        print(f"   Profili per minuto: {60 / stats['average_profile_time']:.1f}")
+        logger.info("⚡ BENCHMARK GENERALE:")
+        logger.info(f"   Setup driver: {stats['driver_setup_time']:.2f}s")
+        logger.info(f"   Scraping totale: {stats['total_scraping_time']:.2f}s")
+        logger.info(f"   Tempo medio per profilo: {stats['average_profile_time']:.2f}s")
+        logger.info(f"   Profili per minuto: {60 / stats['average_profile_time']:.1f}")
         
         # Analisi velocità
-        print("\n🏆 ANALISI VELOCITÀ:")
-        print(f"   Più veloce: {stats['fastest_profile']['name']} ({stats['fastest_profile']['time']:.2f}s)")
-        print(f"   Più lento: {stats['slowest_profile']['name']} ({stats['slowest_profile']['time']:.2f}s)")
+        logger.info("🏆 ANALISI VELOCITÀ:")
+        logger.info(f"   Più veloce: {stats['fastest_profile']['name']} ({stats['fastest_profile']['time']:.2f}s)")
+        logger.info(f"   Più lento: {stats['slowest_profile']['name']} ({stats['slowest_profile']['time']:.2f}s)")
         
         # Confronto con soglie di performance
-        print("\n📊 VALUTAZIONE PERFORMANCE:")
+        logger.info("📊 VALUTAZIONE PERFORMANCE:")
         avg_time = stats['average_profile_time']
         if avg_time < 8:
             performance_rating = "🟢 ECCELLENTE"
@@ -332,40 +290,40 @@ def test_performance():
             performance_rating = "🟡 BUONA"
         else:
             performance_rating = "🔴 LENTA"
-        print(f"   Rating: {performance_rating}")
+        logger.info(f"   Rating: {performance_rating}")
         
         # Suggerimenti di ottimizzazione
-        print("\n💡 SUGGERIMENTI OTTIMIZZAZIONE:")
+        logger.info("💡 SUGGERIMENTI OTTIMIZZAZIONE:")
         total_wait_time = (len(scraper.profiles) - 1) * 3
         active_work_time = stats['total_scraping_time'] - total_wait_time
         efficiency = (active_work_time / stats['total_scraping_time']) * 100
         
-        print(f"   Efficienza attuale: {efficiency:.1f}%")
+        logger.info(f"   Efficienza attuale: {efficiency:.1f}%")
         if efficiency < 50:
-            print("   ⚠️  Considerare riduzione tempi di attesa")
+            logger.info("   ⚠️  Considerare riduzione tempi di attesa")
         if avg_time > 10:
-            print("   ⚠️  Considerare ottimizzazione parsing HTML")
+            logger.info("   ⚠️  Considerare ottimizzazione parsing HTML")
         
         # Test di velocità di rete
-        print("\n🌐 TEST VELOCITÀ RETE:")
+        logger.info("🌐 TEST VELOCITÀ RETE:")
         fastest_load = min(data['page_load_time'] for data in stats['profile_times'].values())
         slowest_load = max(data['page_load_time'] for data in stats['profile_times'].values())
         avg_load = sum(data['page_load_time'] for data in stats['profile_times'].values()) / len(stats['profile_times'])
         
-        print(f"   Caricamento più veloce: {fastest_load:.2f}s")
-        print(f"   Caricamento più lento: {slowest_load:.2f}s")
-        print(f"   Caricamento medio: {avg_load:.2f}s")
+        logger.info(f"   Caricamento più veloce: {fastest_load:.2f}s")
+        logger.info(f"   Caricamento più lento: {slowest_load:.2f}s")
+        logger.info(f"   Caricamento medio: {avg_load:.2f}s")
         
         if avg_load > 7:
-            print("   ⚠️  Connessione lenta rilevata")
+            logger.info("   ⚠️  Connessione lenta rilevata")
         
         # Proiezioni per diversi scenari
-        print("\n📈 PROIEZIONI SCALABILITÀ:")
+        logger.info("📈 PROIEZIONI SCALABILITÀ:")
         profiles_per_hour = 3600 / (stats['average_profile_time'] + 3)  # +3 per pausa
-        print(f"   Profili processabili per ora: {profiles_per_hour:.0f}")
-        print(f"   Tempo per 100 profili: {(100 * (stats['average_profile_time'] + 3)) / 60:.1f} minuti")
+        logger.info(f"   Profili processabili per ora: {profiles_per_hour:.0f}")
+        logger.info(f"   Tempo per 100 profili: {(100 * (stats['average_profile_time'] + 3)) / 60:.1f} minuti")
         
-        print("="*70)
+        logger.info("="*70)
         
         return True
         
@@ -406,6 +364,7 @@ def test_sheets():
         logger.error(f"Errore nel test Google Sheets: {e}")
         return False
 
+# Funzioni di test e debug (non utilizzate nel workflow principale)
 def aggiorna_sheet_con_dati_statici():
     """Aggiorna la tab 'riepilogo' con i dati statici dell'ultimo test, cancellando prima tutto."""
     logger.info("=== AGGIORNAMENTO SOLO SHEET CON DATI STATICI ===")
@@ -588,13 +547,13 @@ def debug_scraping_issue():
 def debug_totals():
     """Debug dei calcoli dei totali nelle Google Sheets"""
     try:
-        print("🔍 DEBUGGING TOTALI GOOGLE SHEETS")
-        print("=" * 50)
+        logger.info("🔍 DEBUGGING TOTALI GOOGLE SHEETS")
+        logger.info("=" * 50)
         
         # Configura le credenziali
         credentials_json = os.environ.get('GOOGLE_SHEETS_CREDENTIALS')
         if not credentials_json:
-            print("❌ ERRORE: Credenziali Google Sheets non trovate")
+            logger.error("❌ ERRORE: Credenziali Google Sheets non trovate")
             return False
             
         # Inizializza l'updater
@@ -606,7 +565,7 @@ def debug_totals():
         month_name = calendar.month_name[current_month].lower()
         year = datetime.now().year
         
-        print(f"📖 Lettura dati da {month_name} {year}...")
+        logger.info(f"📖 Lettura dati da {month_name} {year}...")
         
         result = updater.service.spreadsheets().values().get(
             spreadsheetId=updater.spreadsheet_id,
@@ -615,20 +574,20 @@ def debug_totals():
         
         values = result.get('values', [])
         if not values:
-            print(f"❌ ERRORE: Tab {month_name} vuota!")
+            logger.error(f"❌ ERRORE: Tab {month_name} vuota!")
             return False
             
         header = values[0]
-        print(f"📊 Header: {header}")
-        print(f"📊 Numero righe: {len(values)}")
+        logger.info(f"📊 Header: {header}")
+        logger.info(f"📊 Numero righe: {len(values)}")
         
         # Analizza ogni colonna per i totali
-        print("\n🔢 ANALISI COLONNE E TOTALI:")
-        print("-" * 40)
+        logger.info("🔢 ANALISI COLONNE E TOTALI:")
+        logger.info("-" * 40)
         
         for col_idx in range(2, len(header)):
             col_name = header[col_idx] if col_idx < len(header) else f"Col_{col_idx}"
-            print(f"\n📋 Colonna {col_idx}: {col_name}")
+            logger.info(f"📋 Colonna {col_idx}: {col_name}")
             
             col_sum = 0
             valid_values = []
@@ -649,23 +608,23 @@ def debug_totals():
                     except (ValueError, TypeError):
                         invalid_values.append(f"R{row_idx+1}: '{cell_value}' (non numerico)")
                         
-            print(f"✅ Somma calcolata: {col_sum}")
-            print(f"📊 Valori validi: {len(valid_values)}")
+            logger.info(f"✅ Somma calcolata: {col_sum}")
+            logger.info(f"📊 Valori validi: {len(valid_values)}")
             if len(valid_values) <= 5:
                 for val in valid_values:
-                    print(f"   - {val}")
+                    logger.info(f"   - {val}")
             else:
-                print(f"   - Prime 3: {valid_values[:3]}")
-                print(f"   - Ultime 2: {valid_values[-2:]}")
+                logger.info(f"   - Prime 3: {valid_values[:3]}")
+                logger.info(f"   - Ultime 2: {valid_values[-2:]}")
                     
             if invalid_values:
-                print(f"⚠️  Valori non numerici: {len(invalid_values)}")
+                logger.info(f"⚠️  Valori non numerici: {len(invalid_values)}")
                 for val in invalid_values[:3]:  # Mostra solo i primi 3
-                    print(f"   - {val}")
+                    logger.info(f"   - {val}")
                     
         # Trova la riga dei totali attuale
-        print("\n🎯 RIGA TOTALI ATTUALE:")
-        print("-" * 30)
+        logger.info("🎯 RIGA TOTALI ATTUALE:")
+        logger.info("-" * 30)
         
         totals_row = None
         totals_row_idx = None
@@ -677,12 +636,12 @@ def debug_totals():
                 break
                 
         if totals_row:
-            print(f"📍 Riga totali trovata alla posizione {totals_row_idx + 1}")
-            print(f"📋 Contenuto: {totals_row}")
+            logger.info(f"📍 Riga totali trovata alla posizione {totals_row_idx + 1}")
+            logger.info(f"📋 Contenuto: {totals_row}")
             
             # Confronta con calcolo corretto
-            print("\n🔍 CONFRONTO CALCOLO CORRETTO:")
-            print("-" * 35)
+            logger.info("🔍 CONFRONTO CALCOLO CORRETTO:")
+            logger.info("-" * 35)
             
             for col_idx in range(2, min(len(header), len(totals_row))):
                 col_name = header[col_idx] if col_idx < len(header) else f"Col_{col_idx}"
@@ -702,15 +661,15 @@ def debug_totals():
                 current_total = totals_row[col_idx] if col_idx < len(totals_row) else ""
                 
                 if str(correct_sum) == str(current_total):
-                    print(f"✅ {col_name}: {current_total} (corretto)")
+                    logger.info(f"✅ {col_name}: {current_total} (corretto)")
                 else:
-                    print(f"❌ {col_name}: attuale='{current_total}', corretto={correct_sum}")
+                    logger.info(f"❌ {col_name}: attuale='{current_total}', corretto={correct_sum}")
                     
         else:
-            print("⚠️  Nessuna riga totali trovata!")
+            logger.info("⚠️  Nessuna riga totali trovata!")
             
-        print("\n" + "=" * 50)
-        print("🔍 Debug totali completato")
+        logger.info("=" * 50)
+        logger.info("🔍 Debug totali completato")
         
         return True
         
@@ -725,11 +684,14 @@ def test_credentials():
         logger.info("🔍 TEST CREDENZIALI GOOGLE SHEETS")
         logger.info("=" * 50)
         
-        # Ottieni credenziali
-        credentials_json = os.environ.get('GOOGLE_SHEETS_CREDENTIALS')
-        if not credentials_json:
-            logger.error("❌ Credenziali non trovate nelle variabili d'ambiente")
+        # Ottieni credenziali usando la funzione centralizzata
+        credentials = load_credentials()
+        if not credentials:
+            logger.error("❌ Credenziali non trovate")
             return False
+        
+        # Converti in JSON string per il test
+        credentials_json = json.dumps(credentials)
         
         # Esegui test
         tester = CredentialsTest()
