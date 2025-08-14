@@ -1370,8 +1370,10 @@ class GoogleSheetsUpdater:
                 }
             })
             
-            # Colori alternati per le righe dati (13 profili)
-            for row_idx in range(1, 14):  # 13 profili
+            # Colori alternati per le righe dati (dinamico basato sul numero di profili)
+            from config import VESTIAIRE_PROFILES
+            num_profiles = len(VESTIAIRE_PROFILES)
+            for row_idx in range(1, num_profiles + 1):  # Profili da 1 a num_profiles
                 color = {"red": 0.89, "green": 0.94, "blue": 0.99} if row_idx % 2 == 0 else {"red": 1, "green": 1, "blue": 1}
                 requests.append({
                     "repeatCell": {
@@ -1391,13 +1393,14 @@ class GoogleSheetsUpdater:
                     }
                 })
             
-            # Formattazione speciale per la riga dei totali (riga 15)
+            # Formattazione speciale per la riga dei totali (riga num_profiles + 1)
+            total_row_idx = num_profiles + 1
             requests.append({
                 "repeatCell": {
                     "range": {
                         "sheetId": sheet_id,
-                        "startRowIndex": 14,  # Riga 15 (indice 14)
-                        "endRowIndex": 15,
+                        "startRowIndex": total_row_idx,  # Riga dei totali
+                        "endRowIndex": total_row_idx + 1,
                         "startColumnIndex": 0,
                         "endColumnIndex": num_months + 2
                     },
@@ -1420,7 +1423,7 @@ class GoogleSheetsUpdater:
                     "range": {
                         "sheetId": sheet_id,
                         "startRowIndex": 0,
-                        "endRowIndex": 15,  # Fino alla riga dei totali
+                        "endRowIndex": total_row_idx + 1,  # Fino alla riga dei totali
                         "startColumnIndex": num_months + 1,  # Colonna Totale
                         "endColumnIndex": num_months + 2
                     },
@@ -1458,7 +1461,7 @@ class GoogleSheetsUpdater:
                 body={"requests": requests}
             ).execute()
             
-            logger.info("Formattazione tab Overview completata")
+            logger.info(f"Formattazione tab Overview completata per {num_profiles} profili")
             
         except Exception as e:
             logger.error(f"Errore nella formattazione della tab Overview: {e}")
