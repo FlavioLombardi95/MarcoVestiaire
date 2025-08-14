@@ -1,0 +1,62 @@
+# Credenziali e file sensibili
+credentials.json
+*.json
+.env
+.env.local
+.env.production
+
+# Logs
+*.log
+logs/
+vestiaire_monitor.log
+
+# Cache Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environment
+venv/
+env/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Chrome driver
+chromedriver
+chromedriver.exe
+
+# Temporary files
+*.tmp
+*.temp
+temp/
+tmp/
+
+# GitHub Actions artifacts
+artifacts/ 
