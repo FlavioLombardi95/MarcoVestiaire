@@ -164,4 +164,4 @@ def print_config_info():
     print("="*50)
 
 if __name__ == "__main__":
-    print_config_info() 
+    print_config_info()
