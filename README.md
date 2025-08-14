@@ -84,7 +84,11 @@ Modifica `config.py` per aggiungere/rimuovere profili:
 ```python
 VESTIAIRE_PROFILES = {
     "Nome Profilo": "ID_Profilo",
+<<<<<<< HEAD
     # ... altri profili (attualmente 14 profili configurati)
+=======
+    # ... altri profili
+>>>>>>> 3511966617f3382ef741cd342e5b2538a8d40425
 }
 ```
 
